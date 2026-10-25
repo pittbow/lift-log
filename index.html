@@ -209,7 +209,8 @@ function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); }
   catch (e) { toast('⚠️ 儲存失敗，請先匯出備份'); }
 }
-const ui = { part: 'all', tab: 'train', hist: null, trendEx: null, metric: 'e1rm' };
+const _now = new Date();
+const ui = { hq: '', hview: 'list', cal: { y: _now.getFullYear(), m: _now.getMonth() }, mg: 'week', part: 'all', tab: 'train', hist: null, trendEx: null, metric: 'e1rm' };
 const exInfo = id => S.exercises.find(e => e.id === id);
 const exName = (id, snap) => exInfo(id)?.name || snap || '（已刪除動作）';
 const sortedW = () => [...S.workouts].sort((a, b) => (b.date + String(b.start || '').padStart(15, '0')).localeCompare(a.date + String(a.start || '').padStart(15, '0')));
@@ -387,14 +388,37 @@ function vHist() {
   const ws = sortedW();
   let h = `<div class="hdr"><div class="h1">訓練歷史</div><span class="sub">共 ${ws.length} 次</span></div>`;
   if (!ws.length) return h + `<div class="empty">還沒有任何訓練紀錄<br>完成第一次訓練後會出現在這裡</div>`;
-  ws.forEach(w => {
+  h += `<div class="chips"><button class="chip ${ui.hview === 'list' ? 'on' : ''}" data-act="hview" data-v="list">清單</button><button class="chip ${ui.hview === 'cal' ? 'on' : ''}" data-act="hview" data-v="cal">日曆</button></div>`;
+  if (ui.hview === 'cal') return h + calendarHtml();
+  return h + `<input class="inp left" style="margin-bottom:10px" data-f="hq" value="${esc(ui.hq)}" placeholder="搜尋動作、課表、備註、日期…"><div id="hlist">${histListHtml()}</div>`;
+}
+function histListHtml() {
+  const q = ui.hq.trim().toLowerCase();
+  const ws = sortedW().filter(w => !q || [w.date, w.name, w.note, ...w.exs.flatMap(e => [exName(e.exId, e.n), e.note])].some(t => String(t || '').toLowerCase().includes(q)));
+  if (!ws.length) return `<div class="empty">找不到符合的訓練</div>`;
+  return ws.map(w => {
     const st = workoutStats(w);
-    h += `<button class="card btn block" style="text-align:left" data-act="openHist" data-id="${w.id}">
+    return `<button class="card btn block" style="text-align:left" data-act="openHist" data-id="${w.id}">
     <div class="hrow"><b>${fmtDate(w.date)} ${esc(w.name || '自由訓練')}</b><span>${w.feeling ? FEEL[w.feeling - 1] : ''}</span></div>
     <div class="sub" style="font-weight:400">${w.exs.map(e => esc(exName(e.exId, e.n))).join('、')}</div>
     <div class="sub" style="font-weight:400">${w.exs.length} 個動作・${st.sets} 組・總量 ${Math.round(st.vol).toLocaleString()} kg${w.bw ? '・體重 ' + w.bw : ''}</div></button>`;
-  });
-  return h;
+  }).join('');
+}
+function calendarHtml() {
+  const { y, m } = ui.cal, first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate();
+  const byDate = {};
+  S.workouts.forEach(w => { (byDate[w.date] = byDate[w.date] || []).push(w); });
+  const ym = `${y}-${pad(m + 1)}`;
+  const n = Object.keys(byDate).filter(d => d.startsWith(ym)).length;
+  let h = `<div class="card"><div class="hrow" style="align-items:center;margin-bottom:10px"><button class="btn sm" data-act="calMove" data-d="-1">‹</button><b style="font-size:17px">${y} 年 ${m + 1} 月</b><button class="btn sm" data-act="calMove" data-d="1">›</button></div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center">${WD.map(x => `<div class="sub" style="font-size:12px">${x}</div>`).join('')}`;
+  for (let i = 0; i < first.getDay(); i++) h += '<div></div>';
+  for (let d = 1; d <= days; d++) {
+    const key = `${ym}-${pad(d)}`, has = byDate[key], isToday = key === today();
+    h += has ? `<button class="btn sm primary" style="min-height:42px;padding:0;position:relative" data-act="calDay" data-d="${key}">${d}${has.length > 1 ? `<span style="position:absolute;top:1px;right:4px;font-size:10px">×${has.length}</span>` : ''}</button>`
+      : `<div style="min-height:42px;display:flex;align-items:center;justify-content:center;border-radius:10px;border:1px solid ${isToday ? 'var(--accent)' : 'transparent'};color:var(--sub)">${d}</div>`;
+  }
+  return h + `</div><div class="sub" style="margin-top:10px">本月訓練 ${n} 天。點有顏色的日期查看。</div></div>`;
 }
 function vHistDetail(w) {
   const st = workoutStats(w);
@@ -422,7 +446,7 @@ function exHistory(exId) {
   return [...S.workouts].sort((a, b) => a.date.localeCompare(b.date) || (a.start || 0) - (b.start || 0)).map(w => {
     const e = w.exs.find(x => x.exId === exId); if (!e || !e.sets.some(s => !s.wu)) return null;
     let best = 0, maxW = 0, vol = 0, top = null;
-    e.sets.filter(s => !s.wu).forEach(s => { const v = e1rm(s.w, s.r); if (v > best) { best = v; top = s; } maxW = Math.max(maxW, s.w || 0); vol += (s.w || 0) * (s.r || 0); });
+    e.sets.filter(s => !s.wu).forEach(s => { const v = e1rm(s.w, s.r); if (v > best || !top || (v === best && (s.r || 0) > (top.r || 0))) { best = v; top = s; } maxW = Math.max(maxW, s.w || 0); vol += (s.w || 0) * (s.r || 0); });
     return { date: w.date, e1rm: best, maxW, vol, top };
   }).filter(Boolean);
 }
@@ -457,6 +481,20 @@ function weeklyBars() {
   });
   return s + `</svg>`;
 }
+function muscleBars() {
+  const dstr = dt => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const mon = new Date(t); mon.setDate(t.getDate() - ((t.getDay() + 6) % 7));
+  let from, to;
+  if (ui.mg === 'week') { from = dstr(mon); to = dstr(t); }
+  else if (ui.mg === 'last') { const a = new Date(mon); a.setDate(a.getDate() - 7); const b = new Date(mon); b.setDate(b.getDate() - 1); from = dstr(a); to = dstr(b); }
+  else { const a = new Date(t); a.setDate(a.getDate() - 29); from = dstr(a); to = dstr(t); }
+  const cnt = Object.fromEntries(GROUPS.map(g => [g, 0]));
+  S.workouts.forEach(w => { if (w.date < from || w.date > to) return; w.exs.forEach(e => { const g = exInfo(e.exId)?.group; if (g) cnt[g] += e.sets.filter(s => !s.wu).length; }); });
+  const mx = Math.max(10, ...Object.values(cnt));
+  return GROUPS.map(g => `<div class="row" style="margin-bottom:6px"><span style="width:36px;font-weight:700">${g}</span><div style="flex:1;background:var(--card2);border-radius:6px;height:20px;overflow:hidden"><div style="width:${cnt[g] / mx * 100}%;height:100%;background:var(--accent)"></div></div><b style="width:34px;text-align:right">${cnt[g]}</b></div>`).join('')
+    + `<div class="sub" style="margin-top:6px">${fmtDate(from)} ～ ${fmtDate(to)}・只計工作組，不含暖身組${ui.mg === '30' ? '' : '。每個肌群每週約 10–20 組是常見的參考範圍'}</div>`;
+}
 function vTrend() {
   const used = [...new Set(S.workouts.flatMap(w => w.exs.filter(e => e.sets.length).map(e => e.exId)))];
   let h = `<div class="hdr"><div class="h1">進步趨勢</div></div>`;
@@ -481,6 +519,7 @@ function vTrend() {
   h += `<div class="h2">個人紀錄（PR）</div><div class="card">${prs.map(x => `<div class="list-item" style="cursor:default"><div><b>${esc(x.n)}</b><div class="sub">${fmtDateY(x.b.date)}</div></div><div style="text-align:right"><b>${fmtN(x.b.top.w)} × ${x.b.top.r}</b><div class="sub">預估 1RM ${fmtN(Math.round(x.b.e1rm))}</div></div></div>`).join('')}<div class="sub" style="margin-top:8px">以預估 1RM 最高的一組為準，不含暖身組。</div></div>`;
   const bws = [...S.workouts].filter(w => w.bw).sort((a, b) => a.date.localeCompare(b.date));
   h += `<div class="h2">體重</div><div class="card">${bws.length ? lineChart(bws.map(w => ({ x: fmtDate(w.date).replace(/（.*/, ''), y: w.bw })), 'kg') : '<div class="empty">訓練時填寫體重後會顯示</div>'}</div>`;
+  h += `<div class="h2">各肌群訓練組數</div><div class="card"><div class="chips">${[['week', '本週'], ['last', '上週'], ['30', '近 30 天']].map(([k, t]) => `<button class="chip ${ui.mg === k ? 'on' : ''}" data-act="mg" data-k="${k}">${t}</button>`).join('')}</div>${muscleBars()}</div>`;
   h += `<div class="h2">每週訓練次數</div><div class="card">${weeklyBars()}</div>`;
   return h;
 }
@@ -492,6 +531,8 @@ function vSet() {
   h += `<div class="card"><div class="row"><label>淺色模式</label><button class="btn sm" data-act="theme">${s.theme === 'light' ? '切回深色' : '切換淺色'}</button></div>
   <div class="row" style="margin-top:10px"><label>預設休息秒數</label><input class="inp" style="max-width:100px" inputmode="numeric" data-f="setRest" value="${s.rest}"></div>
   <div class="row" style="margin-top:10px"><label>重量加減單位 (kg)</label><select class="inp" style="max-width:100px" data-f="setStep">${[1, 1.25, 2, 2.5, 5].map(v => `<option ${v === s.step ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div>`;
+  const nRest = Object.keys(S.restByEx || {}).length;
+  h += `<div class="sub" style="margin:-4px 2px 10px">休息計時中按 ±15 調整後，App 會記住該動作的休息秒數（目前記住 ${nRest} 個動作）。${nRest ? '<button class="btn sm" style="margin-left:6px" data-act="resetRest">全部清除</button>' : ''}</div>`;
   h += `<div class="h2">課表</div>`;
   S.routines.forEach(r => { h += `<div class="card hrow"><div><b>${esc(r.name)}</b><div class="sub">${r.items.length} 個動作</div></div><div class="row"><button class="btn sm" data-act="editRoutine" data-id="${r.id}">編輯</button></div></div>`; });
   h += `<button class="btn block" data-act="editRoutine" data-id="">＋ 新增課表</button>`;
@@ -559,7 +600,7 @@ const ACT = {
       const now = Date.now(), ld = a.lastDone;
       if (ld && a.exs[ld.ei]?.sets[ld.si] && now - ld.t < 15 * 60e3) a.exs[ld.ei].sets[ld.si].rest = Math.round((now - ld.t) / 1000);
       a.lastDone = { ei: +d.ei, si: +d.si, t: now };
-      a.rest = { start: now, target: S.settings.rest, alerted: false };
+      a.rest = { start: now, target: (S.restByEx || {})[e.exId] || S.settings.rest, exId: e.exId, alerted: false };
       const v = e1rm(num(s.w), num(s.r)), b = bestE1(e.exId, a.editId);
       s.pr = !!(!s.wu && b > 0 && v > b + 0.001);
       if (s.pr) toast('🏆 新紀錄！');
@@ -592,7 +633,7 @@ const ACT = {
     <div class="sub" style="margin-bottom:6px">訓練名稱</div><input class="inp left" data-f="aname" value="${esc(S.active.name)}" style="margin-bottom:10px">
     <button class="btn danger block" data-act="abandon">${S.active.editId ? '放棄編輯' : '放棄這次訓練'}</button><button class="btn block" data-act="closeModal">關閉</button>`),
   abandon: () => { if (confirm(S.active.editId ? '放棄這次的修改？' : '放棄這次訓練？已輸入的資料會消失。')) { S.active = null; save(); closeModal(); render(); } },
-  restAdj: d => { const r = S.active?.rest; if (r) { r.target = Math.max(15, r.target + +d.d); r.alerted = Date.now() - r.start >= r.target * 1000; save(); tick(); } },
+  restAdj: d => { const r = S.active?.rest; if (r) { r.target = Math.max(15, r.target + +d.d); if (r.exId) { S.restByEx = S.restByEx || {}; S.restByEx[r.exId] = r.target; } r.alerted = Date.now() - r.start >= r.target * 1000; save(); tick(); } },
   restSkip: () => { if (S.active) { S.active.rest = null; save(); tick(); } },
   finish: () => {
     const a = S.active;
@@ -620,11 +661,21 @@ const ACT = {
   },
   /* 歷史 */
   openHist: d => { ui.hist = d.id; render(); window.scrollTo(0, 0); },
+  hview: d => { ui.hview = d.v; render(); },
+  calMove: d => { let { y, m } = ui.cal; m += +d.d; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } ui.cal = { y, m }; render(); },
+  calDay: d => {
+    const ws = sortedW().filter(w => w.date === d.d);
+    if (ws.length === 1) { ui.hist = ws[0].id; render(); window.scrollTo(0, 0); return; }
+    openModal(`<h3>${fmtDate(d.d)}</h3>` + ws.map(w => `<button class="list-item" data-act="openHistM" data-id="${w.id}"><span>${esc(w.name || '自由訓練')}・${w.exs.length} 個動作</span></button>`).join(''));
+  },
+  openHistM: d => { closeModal(); ui.hist = d.id; render(); window.scrollTo(0, 0); },
   backHist: () => { ui.hist = null; render(); },
   copyHist: d => copyWorkout(d.id),
   editHist: d => editWorkout(d.id),
   delHist: d => { if (confirm('確定刪除這次訓練紀錄？此動作無法復原。')) { S.workouts = S.workouts.filter(w => w.id !== d.id); ui.hist = null; save(); render(); } },
   /* 趨勢 */
+  mg: d => { ui.mg = d.k; render(); },
+  resetRest: () => { S.restByEx = {}; save(); render(); toast('已清除'); },
   metric: d => { ui.metric = d.m; render(); },
   /* 動作選擇 */
   part: d => { ui.part = d.p; fillPicker($('#pq').value); },
@@ -708,6 +759,7 @@ document.addEventListener('input', e => {
   else if (f === 'aname') a.name = t.value;
   else if (f === 'wnote') a.wnote = t.value;
   else if (f === 'rname') RD.name = t.value;
+  else if (f === 'hq') { ui.hq = t.value; $('#hlist').innerHTML = histListHtml(); return; }
   else if (f === 'setRest') { const n = parseInt(t.value); if (n > 0) S.settings.rest = n; }
   else return;
   save();

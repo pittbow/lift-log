@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0b0b0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="重訓日誌">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>重訓日誌</title>
+<style>
+:root{
+  --bg:#0b0b0d;--card:#17171b;--card2:#232329;--line:#3a3a44;--text:#fff;--sub:#b0b0bb;
+  --accent:#ffd60a;--on-accent:#000;--ok:#30d158;--danger:#ff453a;--shadow:0 -4px 20px rgba(0,0,0,.5);
+}
+:root[data-theme="light"]{
+  --bg:#f2f2f5;--card:#fff;--card2:#e8e8ee;--line:#b9b9c4;--text:#000;--sub:#4d4d58;
+  --accent:#0a56ff;--on-accent:#fff;--ok:#157f33;--danger:#cf0f1f;--shadow:0 -4px 20px rgba(0,0,0,.12);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
+body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
+main{max-width:640px;margin:0 auto;padding:calc(12px + env(safe-area-inset-top)) 12px 12px}
+button{font:inherit;color:inherit;cursor:pointer}
+.hdr{display:flex;justify-content:space-between;align-items:center;margin:4px 2px 12px}
+.h1{font-size:22px;font-weight:800}
+.h2{font-size:17px;font-weight:700;margin:18px 2px 8px}
+.sub{color:var(--sub);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+.row{display:flex;align-items:center;gap:10px}
+.row>label{flex:1;font-weight:600}
+.btn{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-weight:700;min-height:46px}
+.btn.sm{padding:6px 10px;min-height:36px;border-radius:10px}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn.ghost{background:transparent}
+.btn.block{display:block;width:100%;margin-bottom:10px}
+.btn:active{transform:scale(.98);opacity:.85}
+.inp{width:100%;background:var(--bg);color:var(--text);border:2px solid var(--line);border-radius:10px;padding:8px;font:inherit;font-weight:700;text-align:center;min-height:44px}
+.inp.left{text-align:left;font-weight:500}
+.inp:focus{outline:none;border-color:var(--accent)}
+textarea.inp{text-align:left;font-weight:500;min-height:80px}
+select.inp{text-align:left}
+.ex-title{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ex-title b{font-size:18px}
+.prev{color:var(--sub);font-size:13px;margin:2px 0 8px}
+.sethead,.set{display:grid;grid-template-columns:24px minmax(104px,1.9fr) minmax(48px,1fr) 46px 44px;gap:6px;align-items:center}
+.sethead{color:var(--sub);font-size:12px;text-align:center;margin-bottom:4px}
+.set{margin-bottom:6px}
+.set .n{text-align:center;color:var(--sub);font-weight:700}
+.wcell{display:flex;gap:3px;align-items:center}
+.wcell .inp{padding:8px 2px}
+.step{flex:0 0 28px;height:44px;border-radius:8px;border:1px solid var(--line);background:var(--card2);font-weight:800;font-size:18px;padding:0}
+.rpe{height:44px;border-radius:10px;border:2px solid var(--line);background:var(--bg);font-weight:800;padding:0}
+.rpe.has{border-color:var(--accent);color:var(--accent)}
+.chk{height:44px;border-radius:10px;border:2px solid var(--line);background:var(--bg);font-size:22px;font-weight:900;padding:0;color:transparent}
+.set.done .chk{background:var(--ok);border-color:var(--ok);color:#fff}
+.set.done .inp{opacity:.75}
+.pr{color:var(--accent);font-size:12px}
+.acts{display:flex;gap:8px;margin-top:6px}
+.acts .btn{flex:1}
+.note{margin-top:8px}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:20}
+nav button{flex:1;border:0;background:transparent;padding:9px 0 8px;font-size:12px;color:var(--sub);font-weight:700}
+nav button i{display:block;font-style:normal;font-size:22px;line-height:1.1}
+nav button.on{color:var(--accent)}
+#restbar{position:fixed;left:8px;right:8px;bottom:calc(64px + env(safe-area-inset-bottom));z-index:19;display:none;background:var(--card);border:2px solid var(--accent);border-radius:14px;padding:8px 10px;box-shadow:var(--shadow);max-width:624px;margin:0 auto}
+#restbar.show{display:block}
+#restbar.fin{background:var(--accent);color:var(--on-accent);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.65}}
+#restbar .top{display:flex;align-items:center;gap:8px}
+#restbar .t{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;flex:1}
+#restbar .bar{height:5px;background:var(--line);border-radius:3px;margin-top:6px;overflow:hidden}
+#restbar .bar>div{height:100%;background:var(--accent)}
+#restbar.fin .bar>div{background:var(--on-accent)}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:none;align-items:flex-end;justify-content:center}
+#modal.on{display:flex}
+.sheet{background:var(--card);width:100%;max-width:640px;max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 14px calc(18px + env(safe-area-inset-bottom));border:1px solid var(--line)}
+.sheet h3{margin:0 0 12px;font-size:18px}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
+.grid .btn{padding:12px 0}
+.list-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 4px;border-bottom:1px solid var(--line);width:100%;background:transparent;border-left:0;border-right:0;border-top:0;text-align:left}
+.tag{font-size:12px;color:var(--sub);border:1px solid var(--line);border-radius:6px;padding:1px 6px;margin-left:6px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chip{border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:6px 12px;font-weight:700;font-size:14px}
+.chip.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.feel{display:flex;gap:6px;margin-bottom:12px}
+.feel .btn{flex:1;font-size:26px;padding:8px 0}
+.feel .btn.on{border-color:var(--accent);background:var(--accent)}
+.empty{text-align:center;color:var(--sub);padding:30px 10px}
+#toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:700;z-index:60;opacity:0;transition:opacity .25s;pointer-events:none;max-width:90vw;text-align:center}
+#toast.on{opacity:1}
+svg.chart{width:100%;height:auto;display:block}
+.stat{display:flex;gap:8px;margin-bottom:10px}
+.stat>div{flex:1;background:var(--card2);border-radius:10px;padding:8px;text-align:center}
+.stat b{display:block;font-size:19px}
+.stat span{font-size:12px;color:var(--sub)}
+.hrow{display:flex;justify-content:space-between;gap:8px}
+.setline{font-variant-numeric:tabular-nums;padding:2px 0}
+</style>
+</head>
+<body>
+<main id="main"></main>
+<div id="restbar">
+  <div class="top">
+    <div class="t"><span id="rt">0:00</span> <span class="sub" id="rg" style="font-size:14px"></span></div>
+    <button class="btn sm" data-act="restAdj" data-d="-15">−15</button>
+    <button class="btn sm" data-act="restAdj" data-d="15">＋15</button>
+    <button class="btn sm" data-act="restSkip">略過</button>
+  </div>
+  <div class="bar"><div id="rbar" style="width:0%"></div></div>
+</div>
+<nav>
+  <button data-act="tab" data-t="train"><i>🏋️</i>訓練</button>
+  <button data-act="tab" data-t="hist"><i>📅</i>歷史</button>
+  <button data-act="tab" data-t="trend"><i>📈</i>趨勢</button>
+  <button data-act="tab" data-t="set"><i>⚙️</i>設定</button>
+</nav>
+<div id="modal"></div>
+<div id="toast"></div>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<script>
+'use strict';
+/* ========== 工具 ========== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const pad = n => String(n).padStart(2, '0');
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const WD = ['日','一','二','三','四','五','六'];
+const fmtDate = s => { const [y,m,d] = s.split('-').map(Number); return `${m}/${d}（${WD[new Date(y,m-1,d).getDay()]}）`; };
+const fmtDateY = s => { const [y,m,d] = s.split('-').map(Number); return `${y}/${m}/${d}`; };
+const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
+const fmtN = n => (Math.round(n * 100) / 100).toString();
+const e1rm = (w, r) => (w > 0 && r > 0) ? (r === 1 ? w : w * (1 + r / 30)) : 0;
+const mmss = s => `${Math.floor(s / 60)}:${pad(Math.floor(s % 60))}`;
+const FEEL = ['😫','😕','😐','🙂','🔥'];
+const FEEL_TXT = ['很差','不太好','普通','不錯','超棒'];
+
+/* ========== 內建資料 ========== */
+const GROUPS = ['胸','背','腿','肩','手臂','核心'];
+const BUILTIN = {
+  '胸': ['槓鈴臥推','上斜槓鈴臥推','啞鈴臥推','上斜啞鈴臥推','啞鈴飛鳥','繩索夾胸','蝴蝶機夾胸','伏地挺身'],
+  '背': ['硬舉','引體向上','滑輪下拉','槓鈴划船','啞鈴單臂划船','坐姿划船','T 槓划船','直臂下壓'],
+  '腿': ['槓鈴深蹲','前蹲舉','腿推機','哈克深蹲','保加利亞分腿蹲','弓箭步','羅馬尼亞硬舉','腿伸展','腿彎舉','臀推','小腿提踵'],
+  '肩': ['槓鈴肩推','啞鈴肩推','阿諾肩推','啞鈴側平舉','啞鈴前平舉','反向飛鳥','面拉','聳肩'],
+  '手臂': ['槓鈴彎舉','啞鈴彎舉','錘式彎舉','牧師椅彎舉','繩索彎舉','三頭繩索下壓','仰臥三頭伸展','過頭三頭伸展','窄握臥推','雙槓撐體'],
+  '核心': ['棒式','捲腹','懸垂抬腿','腹輪','繩索捲腹','俄羅斯轉體']
+};
+const bid = n => 'b_' + n;
+function defaultState() {
+  const exercises = [];
+  GROUPS.forEach(g => BUILTIN[g].forEach(n => exercises.push({ id: bid(n), name: n, group: g, builtin: true })));
+  const R = (name, items) => ({ id: uid(), name, items: items.map(([n, s]) => ({ exId: bid(n), sets: s })) });
+  return {
+    v: 1, exercises,
+    routines: [
+      R('推', [['槓鈴臥推',4],['上斜啞鈴臥推',3],['啞鈴肩推',3],['啞鈴側平舉',3],['三頭繩索下壓',3]]),
+      R('拉', [['硬舉',3],['引體向上',3],['槓鈴划船',3],['面拉',3],['槓鈴彎舉',3]]),
+      R('腿', [['槓鈴深蹲',4],['羅馬尼亞硬舉',3],['腿推機',3],['腿彎舉',3],['小腿提踵',4]])
+    ],
+    workouts: [], active: null,
+    settings: { theme: 'dark', rest: 90, step: 2.5, lastExport: null }
+  };
+}
+
+/* ========== 儲存 ========== */
+const KEY = 'lift-log-v1';
+function load() {
+  try {
+    const r = JSON.parse(localStorage.getItem(KEY));
+    if (r && r.workouts) { const d = defaultState(); return { ...d, ...r, settings: { ...d.settings, ...(r.settings || {}) } }; }
+  } catch (e) {}
+  return defaultState();
+}
+let S = load();
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch (e) { toast('⚠️ 儲存失敗，請先匯出備份'); }
+}
+const ui = { tab: 'train', hist: null, trendEx: null, metric: 'e1rm' };
+const exInfo = id => S.exercises.find(e => e.id === id);
+const exName = (id, snap) => exInfo(id)?.name || snap || '（已刪除動作）';
+const sortedW = () => [...S.workouts].sort((a, b) => (b.date + String(b.start || '').padStart(15, '0')).localeCompare(a.date + String(a.start || '').padStart(15, '0')));
+
+/* ========== 訓練邏輯 ========== */
+function lastPerf(exId, excludeId) {
+  for (const w of sortedW()) {
+    if (w.id === excludeId) continue;
+    const e = w.exs.find(x => x.exId === exId && x.sets.length);
+    if (e) return { date: w.date, sets: e.sets };
+  }
+  return null;
+}
+function bestE1(exId, excludeId) {
+  let b = 0;
+  S.workouts.forEach(w => { if (w.id !== excludeId) w.exs.forEach(e => { if (e.exId === exId) e.sets.forEach(s => { b = Math.max(b, e1rm(s.w, s.r)); }); }); });
+  return b;
+}
+const newSet = (w = '', r = '') => ({ w, r, rpe: null, rest: null, done: false });
+function makeEx(exId, n) {
+  const last = lastPerf(exId);
+  const cnt = n || (last ? last.sets.length : 3);
+  const sets = [];
+  for (let i = 0; i < cnt; i++) {
+    const src = last ? (last.sets[i] || last.sets[last.sets.length - 1]) : null;
+    sets.push(newSet(src ? src.w : '', src ? src.r : ''));
+  }
+  return { exId, n: exName(exId), note: '', sets };
+}
+function newActive(extra) {
+  return { id: uid(), date: today(), start: Date.now(), name: '', routineId: null, bw: '', exs: [], rest: null, lastDone: null, editId: null, ...extra };
+}
+function startBlank() { S.active = newActive(); save(); render(); }
+function startRoutine(id) {
+  const r = S.routines.find(x => x.id === id); if (!r) return;
+  S.active = newActive({ name: r.name, routineId: r.id, exs: r.items.map(i => makeEx(i.exId, i.sets)) });
+  save(); render();
+}
+function copyWorkout(id) {
+  if (S.active) return toast('已有進行中的訓練');
+  const w = S.workouts.find(x => x.id === id); if (!w) return;
+  S.active = newActive({ name: w.name || '', routineId: w.routineId || null,
+    exs: w.exs.map(e => ({ exId: e.exId, n: e.n, note: '', sets: e.sets.map(s => newSet(s.w, s.r)) })) });
+  ui.tab = 'train'; save(); render(); toast('已複製，可直接開始');
+}
+function editWorkout(id) {
+  if (S.active) return toast('請先完成或放棄目前的訓練');
+  const w = S.workouts.find(x => x.id === id); if (!w) return;
+  S.active = newActive({ id: w.id, editId: w.id, date: w.date, start: w.start, name: w.name || '', routineId: w.routineId || null,
+    bw: w.bw ?? '', feeling: w.feeling, wnote: w.note || '',
+    exs: w.exs.map(e => ({ exId: e.exId, n: e.n, note: e.note || '', sets: e.sets.map(s => ({ ...s, done: true })) })) });
+  ui.tab = 'train'; save(); render();
+}
+function workoutStats(w) {
+  let sets = 0, vol = 0;
+  w.exs.forEach(e => e.sets.forEach(s => { sets++; vol += (s.w || 0) * (s.r || 0); }));
+  return { sets, vol };
+}
+
+/* ========== 提示音／震動／螢幕常亮 ========== */
+let actx = null;
+function ensureAudio() { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {} }
+function beep() {
+  try {
+    ensureAudio(); if (!actx) return;
+    [0, .25, .5].forEach(t => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.frequency.value = 880; o.connect(g); g.connect(actx.destination);
+      const T = actx.currentTime + t;
+      g.gain.setValueAtTime(.001, T); g.gain.exponentialRampToValueAtTime(.5, T + .02); g.gain.exponentialRampToValueAtTime(.001, T + .18);
+      o.start(T); o.stop(T + .2);
+    });
+  } catch (e) {}
+  try { navigator.vibrate && navigator.vibrate([300, 120, 300, 120, 300]); } catch (e) {}
+}
+let wake = null;
+async function keepAwake() {
+  try { if (S.active && 'wakeLock' in navigator && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { keepAwake(); tick(); } });
+
+/* ========== 休息計時 ========== */
+function tick() {
+  const a = S.active;
+  const el = $('#elapsed');
+  if (el && a) el.textContent = '已訓練 ' + mmss(Math.max(0, (Date.now() - a.start) / 1000)).replace(/^(\d+):(\d+)$/, (m, x, y) => x + ' 分 ' + y + ' 秒');
+  const bar = $('#restbar');
+  if (!a || !a.rest) { bar.classList.remove('show', 'fin'); return; }
+  const sec = (Date.now() - a.rest.start) / 1000, tgt = a.rest.target;
+  bar.classList.add('show');
+  bar.classList.toggle('fin', sec >= tgt);
+  $('#rt').textContent = mmss(sec);
+  $('#rg').textContent = '/ ' + mmss(tgt) + (sec >= tgt ? ' 休息結束' : '');
+  $('#rbar').style.width = Math.min(100, sec / tgt * 100) + '%';
+  if (sec >= tgt && !a.rest.alerted) { a.rest.alerted = true; save(); beep(); }
+}
+setInterval(tick, 500);
+
+/* ========== 畫面 ========== */
+function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2200); }
+function openModal(h) { const m = $('#modal'); m.innerHTML = `<div class="sheet">${h}</div>`; m.classList.add('on'); }
+function closeModal() { const m = $('#modal'); m.classList.remove('on'); m.innerHTML = ''; }
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+function applyTheme() {
+  const t = S.settings.theme;
+  document.documentElement.dataset.theme = t;
+  document.querySelector('meta[name=theme-color]').content = t === 'light' ? '#f2f2f5' : '#0b0b0d';
+}
+function render() {
+  applyTheme();
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === ui.tab));
+  $('#main').innerHTML = ({ train: vTrain, hist: vHist, trend: vTrend, set: vSet })[ui.tab]();
+  if (S.active) keepAwake();
+  tick();
+}
+
+/* --- 訓練 --- */
+function vTrain() { return S.active ? vActive() : vStart(); }
+function vStart() {
+  const last = sortedW()[0];
+  let h = `<div class="hdr"><div class="h1">開始訓練</div></div>`;
+  h += `<button class="btn primary block" data-act="startBlank">＋ 空白訓練</button>`;
+  if (last) h += `<button class="btn block" data-act="copyLast" data-id="${last.id}">📋 複製上次訓練<br><span class="sub">${fmtDate(last.date)} ${esc(last.name || '自由訓練')}・${last.exs.length} 個動作</span></button>`;
+  h += `<div class="h2">我的課表</div>`;
+  if (!S.routines.length) h += `<div class="empty">還沒有課表，到「設定」新增</div>`;
+  S.routines.forEach(r => {
+    h += `<div class="card"><div class="hrow"><div><b style="font-size:18px">${esc(r.name)}</b><div class="sub">${r.items.map(i => esc(exName(i.exId))).join('、')}</div></div>
+    <button class="btn sm primary" data-act="startRoutine" data-id="${r.id}">帶入</button></div></div>`;
+  });
+  return h;
+}
+function vActive() {
+  const a = S.active;
+  let h = `<div class="hdr"><div><div class="h1">${esc(a.name || '自由訓練')}${a.editId ? '（編輯）' : ''}</div><div class="sub">${fmtDate(a.date)}・<span id="elapsed"></span></div></div>
+  <button class="btn sm" data-act="actMenu">⋯</button></div>`;
+  h += `<div class="card row"><label>今日體重 (kg)</label><input class="inp" style="max-width:110px" inputmode="decimal" data-f="bw" value="${esc(a.bw)}" placeholder="選填"></div>`;
+  a.exs.forEach((e, ei) => {
+    const lp = lastPerf(e.exId, a.editId);
+    h += `<div class="card"><div class="ex-title"><b>${esc(exName(e.exId, e.n))}</b><button class="btn sm ghost" data-act="exMenu" data-ei="${ei}">⋯</button></div>
+    <div class="prev">${lp ? '上次 ' + fmtDate(lp.date) + '：' + lp.sets.map(s => `${fmtN(s.w)}×${s.r}`).join('、') : '尚無紀錄'}</div>
+    <div class="sethead"><span>組</span><span>重量 kg</span><span>次數</span><span>RPE</span><span>完成</span></div>`;
+    e.sets.forEach((s, si) => {
+      h += `<div class="set ${s.done ? 'done' : ''}"><div class="n">${si + 1}</div>
+      <div class="wcell"><button class="step" data-act="stepW" data-ei="${ei}" data-si="${si}" data-d="-1">−</button>
+      <input class="inp" inputmode="decimal" data-f="w" data-ei="${ei}" data-si="${si}" value="${esc(s.w)}" placeholder="0">
+      <button class="step" data-act="stepW" data-ei="${ei}" data-si="${si}" data-d="1">＋</button></div>
+      <input class="inp" inputmode="numeric" data-f="r" data-ei="${ei}" data-si="${si}" value="${esc(s.r)}" placeholder="0">
+      <button class="rpe ${s.rpe ? 'has' : ''}" data-act="rpe" data-ei="${ei}" data-si="${si}">${s.rpe || '–'}</button>
+      <button class="chk" data-act="done" data-ei="${ei}" data-si="${si}">✓</button></div>
+      ${s.pr ? '<div class="pr" style="text-align:right">🏆 新紀錄（預估 1RM）</div>' : ''}`;
+    });
+    h += `<div class="acts"><button class="btn sm" data-act="addSet" data-ei="${ei}">＋ 新增一組</button><button class="btn sm" data-act="delSet" data-ei="${ei}">－ 移除最後一組</button></div>
+    <input class="inp left note" data-f="note" data-ei="${ei}" value="${esc(e.note)}" placeholder="這個動作的備註（器材、感受…）"></div>`;
+  });
+  h += `<button class="btn block" data-act="addEx">＋ 新增動作</button><button class="btn primary block" data-act="finish">完成訓練</button>`;
+  return h;
+}
+
+/* --- 歷史 --- */
+function vHist() {
+  if (ui.hist) { const w = S.workouts.find(x => x.id === ui.hist); if (w) return vHistDetail(w); ui.hist = null; }
+  const ws = sortedW();
+  let h = `<div class="hdr"><div class="h1">訓練歷史</div><span class="sub">共 ${ws.length} 次</span></div>`;
+  if (!ws.length) return h + `<div class="empty">還沒有任何訓練紀錄<br>完成第一次訓練後會出現在這裡</div>`;
+  ws.forEach(w => {
+    const st = workoutStats(w);
+    h += `<button class="card btn block" style="text-align:left" data-act="openHist" data-id="${w.id}">
+    <div class="hrow"><b>${fmtDate(w.date)} ${esc(w.name || '自由訓練')}</b><span>${w.feeling ? FEEL[w.feeling - 1] : ''}</span></div>
+    <div class="sub" style="font-weight:400">${w.exs.map(e => esc(exName(e.exId, e.n))).join('、')}</div>
+    <div class="sub" style="font-weight:400">${w.exs.length} 個動作・${st.sets} 組・總量 ${Math.round(st.vol).toLocaleString()} kg${w.bw ? '・體重 ' + w.bw : ''}</div></button>`;
+  });
+  return h;
+}
+function vHistDetail(w) {
+  const st = workoutStats(w);
+  const dur = w.end && w.start ? Math.round((w.end - w.start) / 60000) : null;
+  let h = `<div class="hdr"><button class="btn sm" data-act="backHist">‹ 返回</button><span class="sub">${fmtDateY(w.date)}</span></div>
+  <div class="card"><div class="h1">${esc(w.name || '自由訓練')}</div>
+  <div class="stat" style="margin-top:8px"><div><b>${st.sets}</b><span>組數</span></div><div><b>${Math.round(st.vol).toLocaleString()}</b><span>總量 kg</span></div><div><b>${dur ?? '–'}</b><span>分鐘</span></div></div>
+  ${w.bw ? `<div class="sub">體重 ${w.bw} kg</div>` : ''}
+  ${w.feeling ? `<div>整體感受：${FEEL[w.feeling - 1]} ${FEEL_TXT[w.feeling - 1]}</div>` : ''}
+  ${w.note ? `<div class="sub">${esc(w.note)}</div>` : ''}</div>`;
+  w.exs.forEach(e => {
+    h += `<div class="card"><b style="font-size:17px">${esc(exName(e.exId, e.n))}</b>`;
+    e.sets.forEach((s, i) => { h += `<div class="setline">${i + 1}. ${fmtN(s.w)} kg × ${s.r}${s.rpe ? `　RPE ${s.rpe}` : ''}${s.rest ? `　休 ${s.rest}s` : ''}${s.pr ? ' 🏆' : ''}</div>`; });
+    if (e.note) h += `<div class="sub" style="margin-top:6px">📝 ${esc(e.note)}</div>`;
+    h += `</div>`;
+  });
+  h += `<button class="btn primary block" data-act="copyHist" data-id="${w.id}">📋 以此為範本開始新訓練</button>
+  <button class="btn block" data-act="editHist" data-id="${w.id}">✏️ 編輯這次紀錄</button>
+  <button class="btn danger block" data-act="delHist" data-id="${w.id}">🗑 刪除</button>`;
+  return h;
+}
+
+/* --- 趨勢 --- */
+function exHistory(exId) {
+  return [...S.workouts].sort((a, b) => a.date.localeCompare(b.date) || (a.start || 0) - (b.start || 0)).map(w => {
+    const e = w.exs.find(x => x.exId === exId); if (!e || !e.sets.length) return null;
+    let best = 0, maxW = 0, vol = 0, top = null;
+    e.sets.forEach(s => { const v = e1rm(s.w, s.r); if (v > best) { best = v; top = s; } maxW = Math.max(maxW, s.w || 0); vol += (s.w || 0) * (s.r || 0); });
+    return { date: w.date, e1rm: best, maxW, vol, top };
+  }).filter(Boolean);
+}
+function lineChart(pts, unit) {
+  if (!pts.length) return `<div class="empty">尚無資料</div>`;
+  const W = 340, H = 190, L = 40, R = 12, T = 14, B = 26;
+  let lo = Math.min(...pts.map(p => p.y)), hi = Math.max(...pts.map(p => p.y));
+  if (hi === lo) { hi += 1; lo -= 1; }
+  const pad_ = (hi - lo) * .12; lo -= pad_; hi += pad_;
+  const X = i => L + (pts.length === 1 ? (W - L - R) / 2 : i * (W - L - R) / (pts.length - 1));
+  const Y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(p.y).toFixed(1)}`).join('');
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">`;
+  for (let k = 0; k < 4; k++) { const v = lo + (hi - lo) * k / 3, y = Y(v); s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"/><text x="${L - 5}" y="${y + 4}" text-anchor="end" font-size="11" fill="var(--sub)">${fmtN(Math.round(v * 10) / 10)}</text>`; }
+  s += `<path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`;
+  pts.forEach((p, i) => { s += `<circle cx="${X(i)}" cy="${Y(p.y)}" r="${pts.length > 40 ? 2 : 4}" fill="var(--accent)" stroke="var(--bg)" stroke-width="1.5"/>`; });
+  s += `<text x="${L}" y="${H - 6}" font-size="11" fill="var(--sub)">${esc(pts[0].x)}</text>`;
+  if (pts.length > 1) s += `<text x="${W - R}" y="${H - 6}" text-anchor="end" font-size="11" fill="var(--sub)">${esc(pts[pts.length - 1].x)}</text>`;
+  return s + `</svg>`;
+}
+function weeklyBars() {
+  const mon = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x.getTime(); };
+  const cur = mon(new Date()), weeks = [];
+  for (let i = 7; i >= 0; i--) weeks.push(cur - i * 7 * 864e5 + (i ? 0 : 0));
+  const cnt = weeks.map(() => 0);
+  S.workouts.forEach(w => { const [y, m, d] = w.date.split('-').map(Number); const t = mon(new Date(y, m - 1, d)); const idx = weeks.findIndex(x => Math.abs(x - t) < 36e5 * 13); if (idx >= 0) cnt[idx]++; });
+  const mx = Math.max(3, ...cnt), W = 340, H = 120, bw = 28;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}">`;
+  cnt.forEach((c, i) => {
+    const x = 10 + i * 41, h = c / mx * 70, dt = new Date(weeks[i]);
+    s += `<rect x="${x}" y="${90 - h}" width="${bw}" height="${h}" rx="4" fill="var(--accent)"/><text x="${x + bw / 2}" y="${84 - h}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--text)">${c || ''}</text><text x="${x + bw / 2}" y="108" text-anchor="middle" font-size="10" fill="var(--sub)">${dt.getMonth() + 1}/${dt.getDate()}</text>`;
+  });
+  return s + `</svg>`;
+}
+function vTrend() {
+  const used = [...new Set(S.workouts.flatMap(w => w.exs.filter(e => e.sets.length).map(e => e.exId)))];
+  let h = `<div class="hdr"><div class="h1">進步趨勢</div></div>`;
+  if (!S.workouts.length) return h + `<div class="empty">完成幾次訓練後，這裡會顯示進步曲線</div>`;
+  used.sort((a, b) => exHistory(b).length - exHistory(a).length);
+  if (!used.includes(ui.trendEx)) ui.trendEx = used[0];
+  h += `<select class="inp" data-f="trendEx">${used.map(id => `<option value="${esc(id)}" ${id === ui.trendEx ? 'selected' : ''}>${esc(exName(id, S.workouts.flatMap(w => w.exs).find(e => e.exId === id)?.n))}</option>`).join('')}</select>`;
+  const hist = exHistory(ui.trendEx);
+  const M = { e1rm: ['預估 1RM', 'e1rm'], maxW: ['最大重量', 'maxW'], vol: ['總量', 'vol'] };
+  h += `<div class="chips" style="margin-top:10px">${Object.entries(M).map(([k, v]) => `<button class="chip ${ui.metric === k ? 'on' : ''}" data-act="metric" data-m="${k}">${v[0]}</button>`).join('')}</div>`;
+  const key = M[ui.metric][1];
+  const best = Math.max(...hist.map(p => p.e1rm)), bestW = Math.max(...hist.map(p => p.maxW));
+  h += `<div class="card"><div class="stat"><div><b>${fmtN(Math.round(best * 10) / 10)}</b><span>最佳預估 1RM</span></div><div><b>${fmtN(bestW)}</b><span>最大重量 kg</span></div><div><b>${hist.length}</b><span>訓練次數</span></div></div>
+  ${lineChart(hist.map(p => ({ x: fmtDate(p.date).replace(/（.*/, ''), y: Math.round(p[key] * 10) / 10 })), '')}
+  <div class="sub">預估 1RM 使用 Epley 公式：重量 ×（1 + 次數 ÷ 30）</div></div>`;
+  h += `<div class="h2">最近紀錄</div><div class="card">${[...hist].reverse().slice(0, 8).map(p => `<div class="hrow setline"><span>${fmtDate(p.date)}</span><span>最佳 ${fmtN(p.top.w)}×${p.top.r}</span><span>1RM≈${fmtN(Math.round(p.e1rm))}</span></div>`).join('')}</div>`;
+  const bws = [...S.workouts].filter(w => w.bw).sort((a, b) => a.date.localeCompare(b.date));
+  h += `<div class="h2">體重</div><div class="card">${bws.length ? lineChart(bws.map(w => ({ x: fmtDate(w.date).replace(/（.*/, ''), y: w.bw })), 'kg') : '<div class="empty">訓練時填寫體重後會顯示</div>'}</div>`;
+  h += `<div class="h2">每週訓練次數</div><div class="card">${weeklyBars()}</div>`;
+  return h;
+}
+
+/* --- 設定 --- */
+function vSet() {
+  const s = S.settings;
+  let h = `<div class="hdr"><div class="h1">設定</div></div>`;
+  h += `<div class="card"><div class="row"><label>淺色模式</label><button class="btn sm" data-act="theme">${s.theme === 'light' ? '切回深色' : '切換淺色'}</button></div>
+  <div class="row" style="margin-top:10px"><label>預設休息秒數</label><input class="inp" style="max-width:100px" inputmode="numeric" data-f="setRest" value="${s.rest}"></div>
+  <div class="row" style="margin-top:10px"><label>重量加減單位 (kg)</label><select class="inp" style="max-width:100px" data-f="setStep">${[1, 1.25, 2, 2.5, 5].map(v => `<option ${v === s.step ? 'selected' : ''}>${v}</option>`).join('')}</select></div></div>`;
+  h += `<div class="h2">課表</div>`;
+  S.routines.forEach(r => { h += `<div class="card hrow"><div><b>${esc(r.name)}</b><div class="sub">${r.items.length} 個動作</div></div><div class="row"><button class="btn sm" data-act="editRoutine" data-id="${r.id}">編輯</button></div></div>`; });
+  h += `<button class="btn block" data-act="editRoutine" data-id="">＋ 新增課表</button>`;
+  h += `<div class="h2">動作清單</div><button class="btn block" data-act="manageEx">管理動作（共 ${S.exercises.length} 個）</button>`;
+  h += `<div class="h2">資料備份</div><div class="card">
+  <div class="sub" style="margin-bottom:10px">資料只存在這支手機的瀏覽器，清除瀏覽器資料會消失。請定期匯出備份。<br>上次備份：${s.lastExport ? fmtDateY(s.lastExport) : '尚未備份'}</div>
+  <button class="btn primary block" data-act="exportJson">匯出備份 (JSON)</button>
+  <button class="btn block" data-act="exportCsv">匯出 CSV（可用 Excel 開）</button>
+  <button class="btn block" data-act="importJson">匯入備份（覆蓋現有資料）</button>
+  <button class="btn danger block" data-act="wipe">清除全部資料</button></div>`;
+  return h;
+}
+
+/* ========== 選擇動作 ========== */
+let pickCb = null;
+function openPicker(cb) {
+  pickCb = cb;
+  openModal(`<h3>選擇動作</h3><input class="inp left" id="pq" placeholder="搜尋…" style="margin-bottom:10px"><div id="plist"></div>
+  <h3 style="margin-top:16px">新增自訂動作</h3><div class="row"><input class="inp left" id="cname" placeholder="動作名稱"><select class="inp" id="cgroup" style="max-width:100px">${GROUPS.map(g => `<option>${g}</option>`).join('')}</select></div>
+  <button class="btn block" style="margin-top:10px" data-act="addCustom">新增並選用</button>`);
+  fillPicker('');
+}
+function fillPicker(q) {
+  q = q.trim().toLowerCase();
+  let h = '';
+  GROUPS.forEach(g => {
+    const items = S.exercises.filter(e => e.group === g && (!q || e.name.toLowerCase().includes(q)));
+    if (items.length) h += `<div class="sub" style="margin-top:8px">${g}</div>` + items.map(e => `<button class="list-item" data-act="pick" data-id="${esc(e.id)}"><span>${esc(e.name)}</span></button>`).join('');
+  });
+  $('#plist').innerHTML = h || '<div class="empty">找不到，可在下方新增</div>';
+}
+
+/* ========== 課表編輯 ========== */
+let RD = null;
+function renderRoutineEd() {
+  openModal(`<h3>${RD.isNew ? '新增課表' : '編輯課表'}</h3>
+  <input class="inp left" data-f="rname" value="${esc(RD.name)}" placeholder="課表名稱，例如：推日" style="margin-bottom:10px">
+  ${RD.items.map((it, i) => `<div class="card row" style="padding:8px"><div style="flex:1"><b>${esc(exName(it.exId))}</b></div>
+  <button class="step" data-act="rdSets" data-i="${i}" data-d="-1">−</button><b style="min-width:42px;text-align:center">${it.sets} 組</b><button class="step" data-act="rdSets" data-i="${i}" data-d="1">＋</button>
+  <button class="step" data-act="rdUp" data-i="${i}">↑</button><button class="step" data-act="rdDel" data-i="${i}" style="color:var(--danger)">✕</button></div>`).join('') || '<div class="empty">尚未加入動作</div>'}
+  <button class="btn block" data-act="rdAdd">＋ 加入動作</button>
+  <div class="acts"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" data-act="rdSave">儲存</button></div>
+  ${RD.isNew ? '' : '<button class="btn danger block" style="margin-top:10px" data-act="rdDelete">刪除此課表</button>'}`);
+}
+
+/* ========== 事件 ========== */
+const ACT = {
+  tab: d => { ui.tab = d.t; if (d.t !== 'hist') ui.hist = null; render(); window.scrollTo(0, 0); },
+  closeModal: () => closeModal(),
+  startBlank, startRoutine: d => startRoutine(d.id),
+  copyLast: d => { copyWorkout(d.id); },
+  /* 訓練中 */
+  stepW: d => {
+    const s = S.active.exs[+d.ei].sets[+d.si], st = S.settings.step;
+    const prev = S.active.exs[+d.ei].sets[+d.si - 1];
+    const base = num(s.w) ?? num(prev?.w) ?? 0;
+    s.w = fmtN(Math.max(0, base + (+d.d) * st)); save(); render();
+  },
+  done: d => {
+    const a = S.active, e = a.exs[+d.ei], s = e.sets[+d.si];
+    s.done = !s.done;
+    if (s.done) {
+      ensureAudio();
+      const now = Date.now(), ld = a.lastDone;
+      if (ld && a.exs[ld.ei]?.sets[ld.si] && now - ld.t < 15 * 60e3) a.exs[ld.ei].sets[ld.si].rest = Math.round((now - ld.t) / 1000);
+      a.lastDone = { ei: +d.ei, si: +d.si, t: now };
+      a.rest = { start: now, target: S.settings.rest, alerted: false };
+      const v = e1rm(num(s.w), num(s.r)), b = bestE1(e.exId, a.editId);
+      s.pr = !!(b > 0 && v > b + 0.001);
+      if (s.pr) toast('🏆 新紀錄！');
+    } else s.pr = false;
+    save(); render();
+  },
+  rpe: d => {
+    let g = '';
+    for (let i = 1; i <= 15; i++) g += `<button class="btn" data-act="setRpe" data-ei="${d.ei}" data-si="${d.si}" data-v="${i}">${i}</button>`;
+    openModal(`<h3>RPE（自覺強度）</h3><div class="grid">${g}</div><button class="btn block" data-act="setRpe" data-ei="${d.ei}" data-si="${d.si}" data-v="">清除</button>`);
+  },
+  setRpe: d => { S.active.exs[+d.ei].sets[+d.si].rpe = d.v ? +d.v : null; save(); closeModal(); render(); },
+  addSet: d => { const sets = S.active.exs[+d.ei].sets, l = sets[sets.length - 1]; sets.push(newSet(l ? l.w : '', l ? l.r : '')); save(); render(); },
+  delSet: d => { S.active.exs[+d.ei].sets.pop(); save(); render(); },
+  addEx: () => openPicker(id => { S.active.exs.push(makeEx(id)); save(); closeModal(); render(); }),
+  exMenu: d => openModal(`<h3>${esc(exName(S.active.exs[+d.ei].exId, S.active.exs[+d.ei].n))}</h3>
+    <button class="btn block" data-act="exMove" data-ei="${d.ei}" data-d="-1">↑ 上移</button><button class="btn block" data-act="exMove" data-ei="${d.ei}" data-d="1">↓ 下移</button>
+    <button class="btn danger block" data-act="exDel" data-ei="${d.ei}">移除此動作</button>`),
+  exMove: d => { const x = S.active.exs, i = +d.ei, j = i + +d.d; if (x[j]) { [x[i], x[j]] = [x[j], x[i]]; } save(); closeModal(); render(); },
+  exDel: d => { S.active.exs.splice(+d.ei, 1); save(); closeModal(); render(); },
+  actMenu: () => openModal(`<h3>訓練選項</h3>
+    <div class="sub" style="margin-bottom:6px">訓練名稱</div><input class="inp left" data-f="aname" value="${esc(S.active.name)}" style="margin-bottom:10px">
+    <button class="btn danger block" data-act="abandon">${S.active.editId ? '放棄編輯' : '放棄這次訓練'}</button><button class="btn block" data-act="closeModal">關閉</button>`),
+  abandon: () => { if (confirm(S.active.editId ? '放棄這次的修改？' : '放棄這次訓練？已輸入的資料會消失。')) { S.active = null; save(); closeModal(); render(); } },
+  restAdj: d => { const r = S.active?.rest; if (r) { r.target = Math.max(15, r.target + +d.d); r.alerted = Date.now() - r.start >= r.target * 1000; save(); tick(); } },
+  restSkip: () => { if (S.active) { S.active.rest = null; save(); tick(); } },
+  finish: () => {
+    const a = S.active;
+    const doneN = a.exs.reduce((n, e) => n + e.sets.filter(s => s.done).length, 0);
+    const todo = a.exs.reduce((n, e) => n + e.sets.filter(s => !s.done).length, 0);
+    if (!doneN) return toast('還沒有勾選任何一組');
+    FIN.feeling = a.feeling || null;
+    openModal(`<h3>完成訓練 🎉</h3><div class="sub" style="margin-bottom:8px">今天整體感覺如何？</div>
+    <div class="feel">${FEEL.map((f, i) => `<button class="btn ${FIN.feeling === i + 1 ? 'on' : ''}" data-act="feel" data-v="${i + 1}">${f}</button>`).join('')}</div>
+    <textarea class="inp" data-f="wnote" placeholder="整體備註（睡眠、狀態、痠痛…）">${esc(a.wnote || '')}</textarea>
+    ${todo ? `<div class="sub" style="margin:8px 0">有 ${todo} 組未勾選，不會被儲存。</div>` : ''}
+    <div class="acts" style="margin-top:12px"><button class="btn" data-act="closeModal">返回</button><button class="btn primary" data-act="finishOk">儲存</button></div>`);
+  },
+  feel: d => { FIN.feeling = +d.v; document.querySelectorAll('.feel .btn').forEach((b, i) => b.classList.toggle('on', i + 1 === FIN.feeling)); },
+  finishOk: () => {
+    const a = S.active;
+    const w = {
+      id: a.id, date: a.date, start: a.start, end: Date.now(), name: a.name, routineId: a.routineId,
+      bw: num(a.bw), feeling: FIN.feeling, note: (a.wnote || '').trim(),
+      exs: a.exs.map(e => ({ exId: e.exId, n: exName(e.exId, e.n), note: e.note.trim(), sets: e.sets.filter(s => s.done).map(s => ({ w: num(s.w) || 0, r: num(s.r) || 0, rpe: s.rpe, rest: s.rest, ...(s.pr ? { pr: true } : {}) })) })).filter(e => e.sets.length)
+    };
+    if (a.editId) { const i = S.workouts.findIndex(x => x.id === a.editId); if (i >= 0) { w.end = S.workouts[i].end || w.end; S.workouts[i] = w; } else S.workouts.push(w); }
+    else S.workouts.push(w);
+    S.active = null; save(); closeModal(); ui.tab = 'hist'; ui.hist = w.id; render(); toast('已儲存 💪');
+  },
+  /* 歷史 */
+  openHist: d => { ui.hist = d.id; render(); window.scrollTo(0, 0); },
+  backHist: () => { ui.hist = null; render(); },
+  copyHist: d => copyWorkout(d.id),
+  editHist: d => editWorkout(d.id),
+  delHist: d => { if (confirm('確定刪除這次訓練紀錄？此動作無法復原。')) { S.workouts = S.workouts.filter(w => w.id !== d.id); ui.hist = null; save(); render(); } },
+  /* 趨勢 */
+  metric: d => { ui.metric = d.m; render(); },
+  /* 動作選擇 */
+  pick: d => { const cb = pickCb; pickCb = null; cb && cb(d.id); },
+  addCustom: () => {
+    const name = $('#cname').value.trim(); if (!name) return toast('請輸入動作名稱');
+    let ex = S.exercises.find(e => e.name === name);
+    if (!ex) { ex = { id: 'c_' + uid(), name, group: $('#cgroup').value }; S.exercises.push(ex); save(); }
+    const cb = pickCb; pickCb = null; cb && cb(ex.id);
+  },
+  /* 設定 */
+  theme: () => { S.settings.theme = S.settings.theme === 'light' ? 'dark' : 'light'; save(); render(); },
+  editRoutine: d => {
+    const r = S.routines.find(x => x.id === d.id);
+    RD = r ? { ...JSON.parse(JSON.stringify(r)), isNew: false } : { id: uid(), name: '', items: [], isNew: true };
+    renderRoutineEd();
+  },
+  rdSets: d => { const it = RD.items[+d.i]; it.sets = Math.max(1, Math.min(20, it.sets + +d.d)); renderRoutineEd(); },
+  rdUp: d => { const i = +d.i; if (i > 0) [RD.items[i - 1], RD.items[i]] = [RD.items[i], RD.items[i - 1]]; renderRoutineEd(); },
+  rdDel: d => { RD.items.splice(+d.i, 1); renderRoutineEd(); },
+  rdAdd: () => openPicker(id => { RD.items.push({ exId: id, sets: 3 }); renderRoutineEd(); }),
+  rdSave: () => {
+    if (!RD.name.trim()) return toast('請輸入課表名稱');
+    if (!RD.items.length) return toast('請至少加入一個動作');
+    const r = { id: RD.id, name: RD.name.trim(), items: RD.items };
+    const i = S.routines.findIndex(x => x.id === r.id);
+    if (i >= 0) S.routines[i] = r; else S.routines.push(r);
+    save(); closeModal(); render();
+  },
+  rdDelete: () => { if (confirm('刪除這個課表？（不影響歷史紀錄）')) { S.routines = S.routines.filter(x => x.id !== RD.id); save(); closeModal(); render(); } },
+  manageEx: () => {
+    let h = `<h3>動作清單</h3><div class="sub" style="margin-bottom:8px">刪除動作不會影響歷史紀錄。</div>`;
+    GROUPS.forEach(g => {
+      h += `<div class="sub" style="margin-top:8px">${g}</div>` + S.exercises.filter(e => e.group === g).map(e =>
+        `<div class="list-item"><span>${esc(e.name)}${e.builtin ? '' : '<span class="tag">自訂</span>'}</span><button class="btn sm danger" data-act="delEx" data-id="${esc(e.id)}">刪除</button></div>`).join('');
+    });
+    openModal(h + `<button class="btn block" style="margin-top:12px" data-act="closeModal">關閉</button>`);
+  },
+  delEx: d => { if (confirm('刪除這個動作？')) { S.exercises = S.exercises.filter(e => e.id !== d.id); S.routines.forEach(r => { r.items = r.items.filter(i => i.exId !== d.id); }); save(); ACT.manageEx(); } },
+  exportJson: () => { download(`重訓日誌備份-${today()}.json`, JSON.stringify(S, null, 1), 'application/json'); S.settings.lastExport = today(); save(); render(); },
+  exportCsv: () => {
+    const rows = [['日期','訓練名稱','體重','整體感受','動作','組序','重量(kg)','次數','RPE','休息(秒)','動作備註','訓練備註']];
+    sortedW().reverse().forEach(w => w.exs.forEach(e => e.sets.forEach((s, i) => rows.push([w.date, w.name || '', w.bw ?? '', w.feeling ? FEEL_TXT[w.feeling - 1] : '', exName(e.exId, e.n), i + 1, s.w, s.r, s.rpe ?? '', s.rest ?? '', e.note || '', w.note || '']))));
+    const csv = '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    download(`重訓日誌-${today()}.csv`, csv, 'text/csv');
+  },
+  importJson: () => $('#importFile').click(),
+  wipe: () => { if (confirm('將清除全部訓練紀錄與設定，無法復原。確定？') && confirm('再確認一次：真的要全部清除？')) { S = defaultState(); save(); render(); toast('已清除'); } }
+};
+const FIN = { feeling: null };
+function download(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+$('#importFile').addEventListener('change', e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const o = JSON.parse(rd.result);
+      if (!Array.isArray(o.workouts) || !Array.isArray(o.exercises)) throw 0;
+      if (!confirm(`備份內含 ${o.workouts.length} 次訓練。匯入會覆蓋目前所有資料，確定？`)) return;
+      const d = defaultState(); S = { ...d, ...o, settings: { ...d.settings, ...(o.settings || {}) } };
+      save(); render(); toast('匯入完成');
+    } catch (err) { alert('檔案格式不正確，無法匯入。'); }
+  };
+  rd.readAsText(f);
+});
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act]'); if (!t) return;
+  const f = ACT[t.dataset.act]; if (f) f(t.dataset, t);
+});
+document.addEventListener('input', e => {
+  const t = e.target, f = t.dataset.f; if (!f) return;
+  const a = S.active, ei = +t.dataset.ei, si = +t.dataset.si;
+  if (f === 'w' || f === 'r') a.exs[ei].sets[si][f] = t.value.replace(',', '.');
+  else if (f === 'note') a.exs[ei].note = t.value;
+  else if (f === 'bw') a.bw = t.value.replace(',', '.');
+  else if (f === 'aname') a.name = t.value;
+  else if (f === 'wnote') a.wnote = t.value;
+  else if (f === 'rname') RD.name = t.value;
+  else if (f === 'setRest') { const n = parseInt(t.value); if (n > 0) S.settings.rest = n; }
+  else return;
+  save();
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.f === 'trendEx') { ui.trendEx = t.value; render(); }
+  if (t.dataset.f === 'setStep') { S.settings.step = +t.value; save(); }
+});
+document.addEventListener('input', e => { if (e.target.id === 'pq') fillPicker(e.target.value); });
+document.addEventListener('focusin', e => { if (e.target.matches('.set .inp')) setTimeout(() => e.target.select && e.target.select(), 0); });
+
+/* ========== 啟動 ========== */
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+render();
+</script>
+</body>
+</html>

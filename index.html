@@ -51,7 +51,9 @@ select.inp{text-align:left}
 .sethead,.set{display:grid;grid-template-columns:24px minmax(104px,1.9fr) minmax(48px,1fr) 46px 44px;gap:6px;align-items:center}
 .sethead{color:var(--sub);font-size:12px;text-align:center;margin-bottom:4px}
 .set{margin-bottom:6px}
-.set .n{text-align:center;color:var(--sub);font-weight:700}
+.set .n{text-align:center;color:var(--sub);font-weight:700;background:transparent;border:0;padding:10px 0;min-height:44px}
+.set.wu .n{color:var(--accent)}
+.set.wu .inp{border-style:dashed}
 .wcell{display:flex;gap:3px;align-items:center}
 .wcell .inp{padding:8px 2px}
 .step{flex:0 0 28px;height:44px;border-radius:8px;border:1px solid var(--line);background:var(--card2);font-weight:800;font-size:18px;padding:0}
@@ -216,14 +218,14 @@ const sortedW = () => [...S.workouts].sort((a, b) => (b.date + String(b.start ||
 function lastPerf(exId, excludeId) {
   for (const w of sortedW()) {
     if (w.id === excludeId) continue;
-    const e = w.exs.find(x => x.exId === exId && x.sets.length);
-    if (e) return { date: w.date, sets: e.sets };
+    const e = w.exs.find(x => x.exId === exId && x.sets.some(s => !s.wu));
+    if (e) return { date: w.date, sets: e.sets.filter(s => !s.wu) };
   }
   return null;
 }
 function bestE1(exId, excludeId) {
   let b = 0;
-  S.workouts.forEach(w => { if (w.id !== excludeId) w.exs.forEach(e => { if (e.exId === exId) e.sets.forEach(s => { b = Math.max(b, e1rm(s.w, s.r)); }); }); });
+  S.workouts.forEach(w => { if (w.id !== excludeId) w.exs.forEach(e => { if (e.exId === exId) e.sets.forEach(s => { if (!s.wu) b = Math.max(b, e1rm(s.w, s.r)); }); }); });
   return b;
 }
 const newSet = (w = '', r = '') => ({ w, r, rpe: null, rest: null, done: false });
@@ -250,7 +252,7 @@ function copyWorkout(id) {
   if (S.active) return toast('已有進行中的訓練');
   const w = S.workouts.find(x => x.id === id); if (!w) return;
   S.active = newActive({ name: w.name || '', routineId: w.routineId || null,
-    exs: w.exs.map(e => ({ exId: e.exId, n: e.n, note: '', sets: e.sets.map(s => newSet(s.w, s.r)) })) });
+    exs: w.exs.map(e => ({ exId: e.exId, n: e.n, note: '', sets: e.sets.map(s => ({ ...newSet(s.w, s.r), ...(s.wu ? { wu: true } : {}) })) })) });
   ui.tab = 'train'; save(); render(); toast('已複製，可直接開始');
 }
 function editWorkout(id) {
@@ -263,7 +265,7 @@ function editWorkout(id) {
 }
 function workoutStats(w) {
   let sets = 0, vol = 0;
-  w.exs.forEach(e => e.sets.forEach(s => { sets++; vol += (s.w || 0) * (s.r || 0); }));
+  w.exs.forEach(e => e.sets.forEach(s => { if (s.wu) return; sets++; vol += (s.w || 0) * (s.r || 0); }));
   return { sets, vol };
 }
 
@@ -320,9 +322,21 @@ function applyTheme() {
 function render() {
   applyTheme();
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === ui.tab));
-  $('#main').innerHTML = ({ train: vTrain, hist: vHist, trend: vTrend, set: vSet })[ui.tab]();
+  $('#main').innerHTML = backupBanner() + ({ train: vTrain, hist: vHist, trend: vTrend, set: vSet })[ui.tab]();
   if (S.active) keepAwake();
   tick();
+}
+
+/* --- 備份提醒 --- */
+function backupBanner() {
+  if (S.active || !S.workouts.length || S.settings.snooze === today()) return '';
+  const since = S.settings.lastExport || [...S.workouts].map(w => w.date).sort()[0];
+  const [y, m, d] = since.split('-').map(Number);
+  const days = Math.floor((Date.now() - new Date(y, m - 1, d)) / 864e5);
+  if (days <= 14) return '';
+  return `<div class="card" style="border-color:var(--accent)"><b>該備份了</b>
+  <div class="sub" style="margin:4px 0 10px">${S.settings.lastExport ? `距離上次備份已 ${days} 天` : `你有 ${S.workouts.length} 次訓練紀錄還沒備份過`}。資料只存在這支手機，清除瀏覽器資料就會消失。</div>
+  <div class="acts"><button class="btn sm" data-act="snooze">明天再說</button><button class="btn sm primary" data-act="exportJson">立即備份</button></div></div>`;
 }
 
 /* --- 訓練 --- */
@@ -351,7 +365,7 @@ function vActive() {
     <div class="prev">${lp ? '上次 ' + fmtDate(lp.date) + '：' + lp.sets.map(s => `${fmtN(s.w)}×${s.r}`).join('、') : '尚無紀錄'}</div>
     <div class="sethead"><span>組</span><span>重量 kg</span><span>次數</span><span>RPE</span><span>完成</span></div>`;
     e.sets.forEach((s, si) => {
-      h += `<div class="set ${s.done ? 'done' : ''}"><div class="n">${si + 1}</div>
+      h += `<div class="set ${s.done ? 'done' : ''} ${s.wu ? 'wu' : ''}"><button class="n" data-act="wu" data-ei="${ei}" data-si="${si}" title="點一下切換暖身組">${s.wu ? '暖' : e.sets.slice(0, si + 1).filter(x => !x.wu).length}</button>
       <div class="wcell"><button class="step" data-act="stepW" data-ei="${ei}" data-si="${si}" data-d="-1">−</button>
       <input class="inp" inputmode="decimal" data-f="w" data-ei="${ei}" data-si="${si}" value="${esc(s.w)}" placeholder="0">
       <button class="step" data-act="stepW" data-ei="${ei}" data-si="${si}" data-d="1">＋</button></div>
@@ -393,7 +407,7 @@ function vHistDetail(w) {
   ${w.note ? `<div class="sub">${esc(w.note)}</div>` : ''}</div>`;
   w.exs.forEach(e => {
     h += `<div class="card"><b style="font-size:17px">${esc(exName(e.exId, e.n))}</b>`;
-    e.sets.forEach((s, i) => { h += `<div class="setline">${i + 1}. ${fmtN(s.w)} kg × ${s.r}${s.rpe ? `　RPE ${s.rpe}` : ''}${s.rest ? `　休 ${s.rest}s` : ''}${s.pr ? ' 🏆' : ''}</div>`; });
+    e.sets.forEach((s, i) => { h += `<div class="setline">${s.wu ? '暖' : e.sets.slice(0, i + 1).filter(x => !x.wu).length}. ${fmtN(s.w)} kg × ${s.r}${s.rpe ? `　RPE ${s.rpe}` : ''}${s.rest ? `　休 ${s.rest}s` : ''}${s.pr ? ' 🏆' : ''}</div>`; });
     if (e.note) h += `<div class="sub" style="margin-top:6px">📝 ${esc(e.note)}</div>`;
     h += `</div>`;
   });
@@ -406,9 +420,9 @@ function vHistDetail(w) {
 /* --- 趨勢 --- */
 function exHistory(exId) {
   return [...S.workouts].sort((a, b) => a.date.localeCompare(b.date) || (a.start || 0) - (b.start || 0)).map(w => {
-    const e = w.exs.find(x => x.exId === exId); if (!e || !e.sets.length) return null;
+    const e = w.exs.find(x => x.exId === exId); if (!e || !e.sets.some(s => !s.wu)) return null;
     let best = 0, maxW = 0, vol = 0, top = null;
-    e.sets.forEach(s => { const v = e1rm(s.w, s.r); if (v > best) { best = v; top = s; } maxW = Math.max(maxW, s.w || 0); vol += (s.w || 0) * (s.r || 0); });
+    e.sets.filter(s => !s.wu).forEach(s => { const v = e1rm(s.w, s.r); if (v > best) { best = v; top = s; } maxW = Math.max(maxW, s.w || 0); vol += (s.w || 0) * (s.r || 0); });
     return { date: w.date, e1rm: best, maxW, vol, top };
   }).filter(Boolean);
 }
@@ -459,6 +473,12 @@ function vTrend() {
   ${lineChart(hist.map(p => ({ x: fmtDate(p.date).replace(/（.*/, ''), y: Math.round(p[key] * 10) / 10 })), '')}
   <div class="sub">預估 1RM 使用 Epley 公式：重量 ×（1 + 次數 ÷ 30）</div></div>`;
   h += `<div class="h2">最近紀錄</div><div class="card">${[...hist].reverse().slice(0, 8).map(p => `<div class="hrow setline"><span>${fmtDate(p.date)}</span><span>最佳 ${fmtN(p.top.w)}×${p.top.r}</span><span>1RM≈${fmtN(Math.round(p.e1rm))}</span></div>`).join('')}</div>`;
+  const prs = used.map(id => {
+    const hs = exHistory(id); let b = null;
+    hs.forEach(p => { if (!b || p.e1rm >= b.e1rm) b = p; });
+    return { id, n: exName(id, S.workouts.flatMap(w => w.exs).find(e => e.exId === id)?.n), b };
+  }).filter(x => x.b).sort((a, b) => b.b.date.localeCompare(a.b.date));
+  h += `<div class="h2">個人紀錄（PR）</div><div class="card">${prs.map(x => `<div class="list-item" style="cursor:default"><div><b>${esc(x.n)}</b><div class="sub">${fmtDateY(x.b.date)}</div></div><div style="text-align:right"><b>${fmtN(x.b.top.w)} × ${x.b.top.r}</b><div class="sub">預估 1RM ${fmtN(Math.round(x.b.e1rm))}</div></div></div>`).join('')}<div class="sub" style="margin-top:8px">以預估 1RM 最高的一組為準，不含暖身組。</div></div>`;
   const bws = [...S.workouts].filter(w => w.bw).sort((a, b) => a.date.localeCompare(b.date));
   h += `<div class="h2">體重</div><div class="card">${bws.length ? lineChart(bws.map(w => ({ x: fmtDate(w.date).replace(/（.*/, ''), y: w.bw })), 'kg') : '<div class="empty">訓練時填寫體重後會顯示</div>'}</div>`;
   h += `<div class="h2">每週訓練次數</div><div class="card">${weeklyBars()}</div>`;
@@ -541,7 +561,7 @@ const ACT = {
       a.lastDone = { ei: +d.ei, si: +d.si, t: now };
       a.rest = { start: now, target: S.settings.rest, alerted: false };
       const v = e1rm(num(s.w), num(s.r)), b = bestE1(e.exId, a.editId);
-      s.pr = !!(b > 0 && v > b + 0.001);
+      s.pr = !!(!s.wu && b > 0 && v > b + 0.001);
       if (s.pr) toast('🏆 新紀錄！');
     } else s.pr = false;
     save(); render();
@@ -552,7 +572,15 @@ const ACT = {
     openModal(`<h3>RPE（自覺強度）</h3><div class="grid">${g}</div><button class="btn block" data-act="setRpe" data-ei="${d.ei}" data-si="${d.si}" data-v="">清除</button>`);
   },
   setRpe: d => { S.active.exs[+d.ei].sets[+d.si].rpe = d.v ? +d.v : null; save(); closeModal(); render(); },
-  addSet: d => { const sets = S.active.exs[+d.ei].sets, l = sets[sets.length - 1]; sets.push(newSet(l ? l.w : '', l ? l.r : '')); save(); render(); },
+  addSet: d => {
+    const a = S.active, e = a.exs[+d.ei], l = e.sets[e.sets.length - 1];
+    const ref = lastPerf(e.exId, a.editId)?.sets[e.sets.filter(s => !s.wu).length];
+    let w = l ? l.w : '', r = l ? l.r : '';
+    if (ref) { r = ref.r; if (!l || l.wu) w = ref.w; }
+    e.sets.push(newSet(w, r)); save(); render();
+  },
+  snooze: () => { S.settings.snooze = today(); save(); render(); },
+  wu: d => { const s = S.active.exs[+d.ei].sets[+d.si]; s.wu = !s.wu; if (s.wu) s.pr = false; save(); render(); },
   delSet: d => { S.active.exs[+d.ei].sets.pop(); save(); render(); },
   addEx: () => openPicker(id => { S.active.exs.push(makeEx(id)); save(); closeModal(); render(); }),
   exMenu: d => openModal(`<h3>${esc(exName(S.active.exs[+d.ei].exId, S.active.exs[+d.ei].n))}</h3>
@@ -584,7 +612,7 @@ const ACT = {
     const w = {
       id: a.id, date: a.date, start: a.start, end: Date.now(), name: a.name, routineId: a.routineId,
       bw: num(a.bw), feeling: FIN.feeling, note: (a.wnote || '').trim(),
-      exs: a.exs.map(e => ({ exId: e.exId, n: exName(e.exId, e.n), note: e.note.trim(), sets: e.sets.filter(s => s.done).map(s => ({ w: num(s.w) || 0, r: num(s.r) || 0, rpe: s.rpe, rest: s.rest, ...(s.pr ? { pr: true } : {}) })) })).filter(e => e.sets.length)
+      exs: a.exs.map(e => ({ exId: e.exId, n: exName(e.exId, e.n), note: e.note.trim(), sets: e.sets.filter(s => s.done).map(s => ({ w: num(s.w) || 0, r: num(s.r) || 0, rpe: s.rpe, rest: s.rest, ...(s.pr ? { pr: true } : {}), ...(s.wu ? { wu: true } : {}) })) })).filter(e => e.sets.length)
     };
     if (a.editId) { const i = S.workouts.findIndex(x => x.id === a.editId); if (i >= 0) { w.end = S.workouts[i].end || w.end; S.workouts[i] = w; } else S.workouts.push(w); }
     else S.workouts.push(w);
@@ -638,8 +666,8 @@ const ACT = {
   delEx: d => { if (confirm('刪除這個動作？')) { S.exercises = S.exercises.filter(e => e.id !== d.id); S.routines.forEach(r => { r.items = r.items.filter(i => i.exId !== d.id); }); save(); ACT.manageEx(); } },
   exportJson: () => { download(`重訓日誌備份-${today()}.json`, JSON.stringify(S, null, 1), 'application/json'); S.settings.lastExport = today(); save(); render(); },
   exportCsv: () => {
-    const rows = [['日期','訓練名稱','體重','整體感受','動作','組序','重量(kg)','次數','RPE','休息(秒)','動作備註','訓練備註']];
-    sortedW().reverse().forEach(w => w.exs.forEach(e => e.sets.forEach((s, i) => rows.push([w.date, w.name || '', w.bw ?? '', w.feeling ? FEEL_TXT[w.feeling - 1] : '', exName(e.exId, e.n), i + 1, s.w, s.r, s.rpe ?? '', s.rest ?? '', e.note || '', w.note || '']))));
+    const rows = [['日期','訓練名稱','體重','整體感受','動作','組序','重量(kg)','次數','RPE','休息(秒)','暖身','動作備註','訓練備註']];
+    sortedW().reverse().forEach(w => w.exs.forEach(e => e.sets.forEach((s, i) => rows.push([w.date, w.name || '', w.bw ?? '', w.feeling ? FEEL_TXT[w.feeling - 1] : '', exName(e.exId, e.n), i + 1, s.w, s.r, s.rpe ?? '', s.rest ?? '', s.wu ? '是' : '', e.note || '', w.note || '']))));
     const csv = '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
     download(`重訓日誌-${today()}.csv`, csv, 'text/csv');
   },

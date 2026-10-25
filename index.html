@@ -145,24 +145,42 @@ const FEEL_TXT = ['很差','不太好','普通','不錯','超棒'];
 /* ========== 內建資料 ========== */
 const GROUPS = ['胸','背','腿','肩','手臂','核心'];
 const BUILTIN = {
-  '胸': ['槓鈴臥推','上斜槓鈴臥推','啞鈴臥推','上斜啞鈴臥推','啞鈴飛鳥','繩索夾胸','蝴蝶機夾胸','伏地挺身'],
-  '背': ['硬舉','引體向上','滑輪下拉','槓鈴划船','啞鈴單臂划船','坐姿划船','T 槓划船','直臂下壓'],
-  '腿': ['槓鈴深蹲','前蹲舉','腿推機','哈克深蹲','保加利亞分腿蹲','弓箭步','羅馬尼亞硬舉','腿伸展','腿彎舉','臀推','小腿提踵'],
-  '肩': ['槓鈴肩推','啞鈴肩推','阿諾肩推','啞鈴側平舉','啞鈴前平舉','反向飛鳥','面拉','聳肩'],
-  '手臂': ['槓鈴彎舉','啞鈴彎舉','錘式彎舉','牧師椅彎舉','繩索彎舉','三頭繩索下壓','仰臥三頭伸展','過頭三頭伸展','窄握臥推','雙槓撐體'],
-  '核心': ['棒式','捲腹','懸垂抬腿','腹輪','繩索捲腹','俄羅斯轉體']
+  '胸': ['槓鈴臥推','上斜槓鈴臥推','啞鈴臥推','上斜啞鈴臥推','啞鈴飛鳥','繩索夾胸','蝴蝶機夾胸','伏地挺身',
+    '坐姿胸推機','上斜胸推機','下斜胸推機','史密斯機臥推','史密斯機上斜臥推','雙槓撐體機（胸）'],
+  '背': ['硬舉','引體向上','滑輪下拉','槓鈴划船','啞鈴單臂划船','坐姿划船','T 槓划船','直臂下壓',
+    '高位下拉機','輔助引體向上機','坐姿划船機','胸靠式划船機','器械 T 槓划船','史密斯機划船','背伸展機'],
+  '腿': ['槓鈴深蹲','前蹲舉','腿推機','哈克深蹲','保加利亞分腿蹲','弓箭步','羅馬尼亞硬舉','腿伸展','腿彎舉','臀推','小腿提踵',
+    '坐姿腿伸展機','坐姿腿彎舉機','俯臥腿彎舉機','史密斯機深蹲','45 度腿推機','擺錘深蹲機','髖外展機','髖內收機','臀推機','站姿小腿提踵機','坐姿小腿提踵機'],
+  '肩': ['槓鈴肩推','啞鈴肩推','阿諾肩推','啞鈴側平舉','啞鈴前平舉','反向飛鳥','面拉','聳肩',
+    '坐姿肩推機','側平舉機','反向蝴蝶機','史密斯機肩推'],
+  '手臂': ['槓鈴彎舉','啞鈴彎舉','錘式彎舉','牧師椅彎舉','繩索彎舉','三頭繩索下壓','仰臥三頭伸展','過頭三頭伸展','窄握臥推','雙槓撐體',
+    '彎舉機','三頭伸展機','坐姿撐體機'],
+  '核心': ['棒式','捲腹','懸垂抬腿','腹輪','繩索捲腹','俄羅斯轉體','腹部捲腹機','坐姿旋轉機','羅馬椅抬腿']
 };
+const PARTS = { all: ['全部', GROUPS], up: ['上半身', ['胸','背','肩','手臂']], low: ['下半身', ['腿']], core: ['核心', ['核心']] };
 const bid = n => 'b_' + n;
+const defaultRoutinesV2 = R => [
+  R('上半身', [['槓鈴臥推',4],['坐姿划船機',3],['坐姿肩推機',3],['高位下拉機',3],['彎舉機',2],['三頭繩索下壓',2]]),
+  R('下半身', [['槓鈴深蹲',4],['腿推機',3],['坐姿腿彎舉機',3],['坐姿腿伸展機',3],['臀推機',3],['站姿小腿提踵機',3]])
+];
+function migrate(s) {
+  if ((s.bv || 1) >= 2) return s;
+  GROUPS.forEach(g => BUILTIN[g].forEach(n => { if (!s.exercises.some(e => e.id === bid(n))) s.exercises.push({ id: bid(n), name: n, group: g, builtin: true }); }));
+  const R = (name, items) => ({ id: uid(), name, items: items.map(([n, k]) => ({ exId: bid(n), sets: k })) });
+  defaultRoutinesV2(R).forEach(r => { if (!s.routines.some(x => x.name === r.name)) s.routines.push(r); });
+  s.bv = 2; return s;
+}
 function defaultState() {
   const exercises = [];
   GROUPS.forEach(g => BUILTIN[g].forEach(n => exercises.push({ id: bid(n), name: n, group: g, builtin: true })));
   const R = (name, items) => ({ id: uid(), name, items: items.map(([n, s]) => ({ exId: bid(n), sets: s })) });
   return {
-    v: 1, exercises,
+    v: 1, bv: 2, exercises,
     routines: [
       R('推', [['槓鈴臥推',4],['上斜啞鈴臥推',3],['啞鈴肩推',3],['啞鈴側平舉',3],['三頭繩索下壓',3]]),
       R('拉', [['硬舉',3],['引體向上',3],['槓鈴划船',3],['面拉',3],['槓鈴彎舉',3]]),
-      R('腿', [['槓鈴深蹲',4],['羅馬尼亞硬舉',3],['腿推機',3],['腿彎舉',3],['小腿提踵',4]])
+      R('腿', [['槓鈴深蹲',4],['羅馬尼亞硬舉',3],['腿推機',3],['腿彎舉',3],['小腿提踵',4]]),
+      ...defaultRoutinesV2(R)
     ],
     workouts: [], active: null,
     settings: { theme: 'dark', rest: 90, step: 2.5, lastExport: null }
@@ -174,7 +192,7 @@ const KEY = 'lift-log-v1';
 function load() {
   try {
     const r = JSON.parse(localStorage.getItem(KEY));
-    if (r && r.workouts) { const d = defaultState(); return { ...d, ...r, settings: { ...d.settings, ...(r.settings || {}) } }; }
+    if (r && r.workouts) { const d = defaultState(); return migrate({ ...d, ...r, bv: r.bv, settings: { ...d.settings, ...(r.settings || {}) } }); }
   } catch (e) {}
   return defaultState();
 }
@@ -183,7 +201,7 @@ function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); }
   catch (e) { toast('⚠️ 儲存失敗，請先匯出備份'); }
 }
-const ui = { tab: 'train', hist: null, trendEx: null, metric: 'e1rm' };
+const ui = { part: 'all', tab: 'train', hist: null, trendEx: null, metric: 'e1rm' };
 const exInfo = id => S.exercises.find(e => e.id === id);
 const exName = (id, snap) => exInfo(id)?.name || snap || '（已刪除動作）';
 const sortedW = () => [...S.workouts].sort((a, b) => (b.date + String(b.start || '').padStart(15, '0')).localeCompare(a.date + String(a.start || '').padStart(15, '0')));
@@ -465,15 +483,16 @@ function vSet() {
 let pickCb = null;
 function openPicker(cb) {
   pickCb = cb;
-  openModal(`<h3>選擇動作</h3><input class="inp left" id="pq" placeholder="搜尋…" style="margin-bottom:10px"><div id="plist"></div>
+  openModal(`<h3>選擇動作</h3><div class="chips" id="pchips"></div><input class="inp left" id="pq" placeholder="搜尋…" style="margin-bottom:10px"><div id="plist"></div>
   <h3 style="margin-top:16px">新增自訂動作</h3><div class="row"><input class="inp left" id="cname" placeholder="動作名稱"><select class="inp" id="cgroup" style="max-width:100px">${GROUPS.map(g => `<option>${g}</option>`).join('')}</select></div>
   <button class="btn block" style="margin-top:10px" data-act="addCustom">新增並選用</button>`);
   fillPicker('');
 }
 function fillPicker(q) {
   q = q.trim().toLowerCase();
+  $('#pchips').innerHTML = Object.entries(PARTS).map(([k, v]) => `<button class="chip ${ui.part === k ? 'on' : ''}" data-act="part" data-p="${k}">${v[0]}</button>`).join('');
   let h = '';
-  GROUPS.forEach(g => {
+  PARTS[ui.part].at(1).forEach(g => {
     const items = S.exercises.filter(e => e.group === g && (!q || e.name.toLowerCase().includes(q)));
     if (items.length) h += `<div class="sub" style="margin-top:8px">${g}</div>` + items.map(e => `<button class="list-item" data-act="pick" data-id="${esc(e.id)}"><span>${esc(e.name)}</span></button>`).join('');
   });
@@ -574,6 +593,7 @@ const ACT = {
   /* 趨勢 */
   metric: d => { ui.metric = d.m; render(); },
   /* 動作選擇 */
+  part: d => { ui.part = d.p; fillPicker($('#pq').value); },
   pick: d => { const cb = pickCb; pickCb = null; cb && cb(d.id); },
   addCustom: () => {
     const name = $('#cname').value.trim(); if (!name) return toast('請輸入動作名稱');
@@ -634,7 +654,7 @@ $('#importFile').addEventListener('change', e => {
       const o = JSON.parse(rd.result);
       if (!Array.isArray(o.workouts) || !Array.isArray(o.exercises)) throw 0;
       if (!confirm(`備份內含 ${o.workouts.length} 次訓練。匯入會覆蓋目前所有資料，確定？`)) return;
-      const d = defaultState(); S = { ...d, ...o, settings: { ...d.settings, ...(o.settings || {}) } };
+      const d = defaultState(); S = migrate({ ...d, ...o, bv: o.bv, settings: { ...d.settings, ...(o.settings || {}) } });
       save(); render(); toast('匯入完成');
     } catch (err) { alert('檔案格式不正確，無法匯入。'); }
   };

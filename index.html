@@ -168,8 +168,13 @@ const defaultRoutinesV2 = R => [
   R('全身', [['槓鈴深蹲',4],['槓鈴臥推',3],['槓鈴划船',3],['羅馬尼亞硬舉',3],['啞鈴肩推',3],['滑輪下拉',3],['棒式',3]])
 ];
 const OLD_UPPER = ['槓鈴臥推','坐姿划船機','坐姿肩推機','高位下拉機','彎舉機','三頭繩索下壓'].map(bid).join();
+const TIMED = ['棒式'].map(bid);
 function migrate(s) {
-  if ((s.bv || 1) >= 3) return s;
+  if ((s.bv || 1) < 3) migrate3(s);
+  if (s.bv < 4) { s.exercises.forEach(e => { if (TIMED.includes(e.id) && e.timed === undefined) e.timed = true; }); s.bv = 4; }
+  return s;
+}
+function migrate3(s) {
   GROUPS.forEach(g => BUILTIN[g].forEach(n => { if (!s.exercises.some(e => e.id === bid(n))) s.exercises.push({ id: bid(n), name: n, group: g, builtin: true }); }));
   const R = (name, items) => ({ id: uid(), name, items: items.map(([n, k]) => ({ exId: bid(n), sets: k })) });
   defaultRoutinesV2(R).forEach(r => {
@@ -177,14 +182,14 @@ function migrate(s) {
     if (i < 0) s.routines.push(r);
     else if (r.name === '上半身' && s.routines[i].items.map(x => x.exId).join() === OLD_UPPER) s.routines[i] = { ...r, id: s.routines[i].id };
   });
-  s.bv = 3; return s;
+  s.bv = 3;
 }
 function defaultState() {
   const exercises = [];
-  GROUPS.forEach(g => BUILTIN[g].forEach(n => exercises.push({ id: bid(n), name: n, group: g, builtin: true })));
+  GROUPS.forEach(g => BUILTIN[g].forEach(n => exercises.push({ id: bid(n), name: n, group: g, builtin: true, ...(TIMED.includes(bid(n)) ? { timed: true } : {}) })));
   const R = (name, items) => ({ id: uid(), name, items: items.map(([n, s]) => ({ exId: bid(n), sets: s })) });
   return {
-    v: 1, bv: 3, exercises,
+    v: 1, bv: 4, exercises,
     routines: [
       R('推', [['槓鈴臥推',4],['上斜啞鈴臥推',3],['啞鈴肩推',3],['啞鈴側平舉',3],['三頭繩索下壓',3]]),
       R('拉', [['硬舉',3],['引體向上',3],['槓鈴划船',3],['面拉',3],['槓鈴彎舉',3]]),
@@ -214,6 +219,8 @@ const _now = new Date();
 const ui = { hq: '', hview: 'list', cal: { y: _now.getFullYear(), m: _now.getMonth() }, mg: 'week', part: 'all', tab: 'train', hist: null, trendEx: null, metric: 'e1rm' };
 const exInfo = id => S.exercises.find(e => e.id === id);
 const exName = (id, snap) => exInfo(id)?.name || snap || '（已刪除動作）';
+const RU = id => exInfo(id)?.timed ? '秒' : '次';
+const fmtSet = (s, u) => num(s.w) > 0 ? `${fmtN(s.w)}×${s.r}${u === '秒' ? '秒' : ''}` : `${s.r || 0} ${u}`;
 const sortedW = () => [...S.workouts].sort((a, b) => (b.date + String(b.start || '').padStart(15, '0')).localeCompare(a.date + String(a.start || '').padStart(15, '0')));
 
 /* ========== 訓練邏輯 ========== */
@@ -253,7 +260,7 @@ function makeEx(exId, n) {
   return { exId, n: exName(exId), note: '', sets };
 }
 function newActive(extra) {
-  return { id: uid(), date: today(), start: Date.now(), name: '', routineId: null, bw: '', exs: [], rest: null, lastDone: null, editId: null, ...extra };
+  return { id: uid(), date: today(), start: Date.now(), name: '', routineId: null, bw: '', exs: [], rest: null, editId: null, ...extra };
 }
 function startBlank() { S.active = newActive(); save(); render(); }
 function startRoutine(id) {
@@ -387,11 +394,11 @@ function vActive() {
   <button class="btn sm" data-act="actMenu">⋯</button></div>`;
   h += `<div class="card row"><label>今日體重 (kg)</label><input class="inp" style="max-width:110px" inputmode="decimal" data-f="bw" value="${esc(a.bw)}" placeholder="選填"></div>`;
   a.exs.forEach((e, ei) => {
-    const lp = lastPerf(e.exId, a.editId), sg = suggestUp(e, lp);
-    h += `<div class="card"><div class="ex-title"><b>${esc(exName(e.exId, e.n))}</b><button class="btn sm ghost" data-act="exMenu" data-ei="${ei}">⋯</button></div>
-    <div class="prev">${lp ? '上次 ' + fmtDate(lp.date) + '：' + lp.sets.map(s => `${fmtN(s.w)}×${s.r}`).join('、') : '尚無紀錄'}</div>
+    const lp = lastPerf(e.exId, a.editId), sg = suggestUp(e, lp), u = RU(e.exId);
+    h += `<div class="card"><div class="ex-title"><b data-act="exHist" data-ei="${ei}" style="text-decoration:underline dotted;text-underline-offset:4px;cursor:pointer">${esc(exName(e.exId, e.n))}</b><button class="btn sm ghost" data-act="exMenu" data-ei="${ei}">⋯</button></div>
+    <div class="prev">${lp ? '上次 ' + fmtDate(lp.date) + '：' + lp.sets.map(s => fmtSet(s, u)).join('、') : '尚無紀錄'}</div>
     ${sg ? `<div class="row" style="margin:-2px 0 8px;font-size:14px"><span style="flex:1;color:var(--accent)">💡 上次 ${sg.n} 組都做到 ${fmtN(sg.w)}×${sg.r}，可以試試 ${sg.to} kg</span><button class="btn sm" data-act="bump" data-ei="${ei}">套用</button></div>` : ''}
-    <div class="sethead"><span>組</span><span>重量 kg</span><span>次數</span><span>RPE</span><span>完成</span></div>`;
+    <div class="sethead"><span>組</span><span>重量 kg</span><span>${u === '秒' ? '秒數' : '次數'}</span><span>RPE</span><span>完成</span></div>`;
     e.sets.forEach((s, si) => {
       h += `<div class="set ${s.done ? 'done' : ''} ${s.wu ? 'wu' : ''}"><button class="n" data-act="wu" data-ei="${ei}" data-si="${si}" title="點一下切換暖身組">${s.wu ? '暖' : e.sets.slice(0, si + 1).filter(x => !x.wu).length}</button>
       <div class="wcell"><button class="step" data-act="stepW" data-ei="${ei}" data-si="${si}" data-d="-1">−</button>
@@ -400,7 +407,7 @@ function vActive() {
       <input class="inp" inputmode="numeric" data-f="r" data-ei="${ei}" data-si="${si}" value="${esc(s.r)}" placeholder="0">
       <button class="rpe ${s.rpe ? 'has' : ''}" data-act="rpe" data-ei="${ei}" data-si="${si}">${s.rpe || '–'}</button>
       <button class="chk" data-act="done" data-ei="${ei}" data-si="${si}">✓</button></div>
-      ${s.pr ? `<div class="pr" style="text-align:right">🏆 新紀錄（${num(s.w) > 0 ? '預估 1RM' : '次數'}）</div>` : ''}`;
+      ${s.pr ? `<div class="pr" style="text-align:right">🏆 新紀錄（${num(s.w) > 0 ? '預估 1RM' : u === '秒' ? '秒數' : '次數'}）</div>` : ''}`;
     });
     h += `<div class="acts"><button class="btn sm" data-act="addSet" data-ei="${ei}">＋ 新增一組</button><button class="btn sm" data-act="delSet" data-ei="${ei}">－ 移除最後一組</button></div>
     <input class="inp left note" data-f="note" data-ei="${ei}" value="${esc(e.note)}" placeholder="這個動作的備註（器材、感受…）"></div>`;
@@ -457,8 +464,9 @@ function vHistDetail(w) {
   ${w.feeling ? `<div>整體感受：${FEEL[w.feeling - 1]} ${FEEL_TXT[w.feeling - 1]}</div>` : ''}
   ${w.note ? `<div class="sub">${esc(w.note)}</div>` : ''}</div>`;
   w.exs.forEach(e => {
+    const u = RU(e.exId);
     h += `<div class="card"><b style="font-size:17px">${esc(exName(e.exId, e.n))}</b>`;
-    e.sets.forEach((s, i) => { h += `<div class="setline">${s.wu ? '暖' : e.sets.slice(0, i + 1).filter(x => !x.wu).length}. ${fmtN(s.w)} kg × ${s.r}${s.rpe ? `　RPE ${s.rpe}` : ''}${s.rest ? `　休 ${s.rest}s` : ''}${s.pr ? ' 🏆' : ''}</div>`; });
+    e.sets.forEach((s, i) => { h += `<div class="setline">${s.wu ? '暖' : e.sets.slice(0, i + 1).filter(x => !x.wu).length}. ${s.w > 0 ? `${fmtN(s.w)} kg × ${s.r}${u === '秒' ? ' 秒' : ''}` : `${s.r} ${u}`}${s.rpe ? `　RPE ${s.rpe}` : ''}${s.rest ? `　休 ${s.rest}s` : ''}${s.pr ? ' 🏆' : ''}</div>`; });
     if (e.note) h += `<div class="sub" style="margin-top:6px">📝 ${esc(e.note)}</div>`;
     h += `</div>`;
   });
@@ -477,6 +485,14 @@ function exHistory(exId) {
     return { date: w.date, e1rm: best, maxW, vol, maxR, totR, top };
   }).filter(Boolean);
 }
+/* 有重量的動作取預估 1RM 最高那次；全是自重／計時則取單組最多次數（秒數） */
+function exPR(id) {
+  const hs = exHistory(id), bw = hs.every(p => p.maxW === 0), sc = p => bw ? p.maxR : p.e1rm; let b = null;
+  hs.forEach(p => { if (!b || sc(p) >= sc(b)) b = p; });
+  return { hs, bw, b };
+}
+const prHtml = (id, x) => x.bw ? `<b>${x.b.maxR} ${RU(id)}</b><div class="sub">${RU(id) === '秒' ? '計時' : '自重'}</div>`
+  : `<b>${fmtN(x.b.top.w)} × ${x.b.top.r}</b><div class="sub">預估 1RM ${fmtN(Math.round(x.b.e1rm))}</div>`;
 function lineChart(pts, unit) {
   if (!pts.length) return `<div class="empty">尚無資料</div>`;
   const W = 340, H = 190, L = 40, R = 12, T = 14, B = 26;
@@ -530,27 +546,22 @@ function vTrend() {
   if (!used.includes(ui.trendEx)) ui.trendEx = used[0];
   h += `<select class="inp" data-f="trendEx">${used.map(id => `<option value="${esc(id)}" ${id === ui.trendEx ? 'selected' : ''}>${esc(exName(id, S.workouts.flatMap(w => w.exs).find(e => e.exId === id)?.n))}</option>`).join('')}</select>`;
   const hist = exHistory(ui.trendEx);
-  const bwMode = hist.every(p => p.maxW === 0);
-  const M = bwMode ? { maxR: ['最多次數', 'maxR'], totR: ['總次數', 'totR'] } : { e1rm: ['預估 1RM', 'e1rm'], maxW: ['最大重量', 'maxW'], vol: ['總量', 'vol'] };
+  const bwMode = hist.every(p => p.maxW === 0), u = RU(ui.trendEx), uw = u === '秒' ? '秒數' : '次數';
+  const M = bwMode ? { maxR: [u === '秒' ? '最長秒數' : '最多次數', 'maxR'], totR: ['總' + uw, 'totR'] } :{ e1rm: ['預估 1RM', 'e1rm'], maxW: ['最大重量', 'maxW'], vol: ['總量', 'vol'] };
   if (!M[ui.metric]) ui.metric = Object.keys(M)[0];
   h += `<div class="chips" style="margin-top:10px">${Object.entries(M).map(([k, v]) => `<button class="chip ${ui.metric === k ? 'on' : ''}" data-act="metric" data-m="${k}">${v[0]}</button>`).join('')}</div>`;
   const key = M[ui.metric][1];
   const mx = k => Math.max(...hist.map(p => p[k]));
-  const stats = bwMode ? [[mx('maxR'), '單組最多次數'], [mx('totR'), '單次最多總次數']] : [[Math.round(mx('e1rm') * 10) / 10, '最佳預估 1RM'], [mx('maxW'), '最大重量 kg']];
+  const stats = bwMode ? [[mx('maxR'), u === '秒' ? '單組最長秒數' : '單組最多次數'], [mx('totR'), '單次最多總' + uw]] :[[Math.round(mx('e1rm') * 10) / 10, '最佳預估 1RM'], [mx('maxW'), '最大重量 kg']];
   h += `<div class="card"><div class="stat">${stats.map(([v, t]) => `<div><b>${fmtN(v)}</b><span>${t}</span></div>`).join('')}<div><b>${hist.length}</b><span>訓練次數</span></div></div>
   ${lineChart(hist.map(p => ({ x: fmtDate(p.date).replace(/（.*/, ''), y: Math.round(p[key] * 10) / 10 })), '')}
-  <div class="sub">${bwMode ? '自重動作以次數計算。計時動作（如棒式）可把秒數填在次數欄。' : '預估 1RM 使用 Epley 公式：重量 ×（1 + 次數 ÷ 30）'}</div></div>`;
+  <div class="sub">${bwMode ? (u === '秒' ? '計時動作以秒數計算。' : '自重動作以次數計算。若這是計時動作，可到「設定 → 管理動作」設為計時。') :'預估 1RM 使用 Epley 公式：重量 ×（1 + 次數 ÷ 30）'}</div></div>`;
   h += `<div class="h2">最近紀錄</div><div class="card">${[...hist].reverse().slice(0, 8).map(p => bwMode
-    ? `<div class="hrow setline"><span>${fmtDate(p.date)}</span><span>最多 ${p.maxR} 次</span><span>總 ${p.totR} 次</span></div>`
+    ? `<div class="hrow setline"><span>${fmtDate(p.date)}</span><span>最多 ${p.maxR} ${u}</span><span>總 ${p.totR} ${u}</span></div>`
     : `<div class="hrow setline"><span>${fmtDate(p.date)}</span><span>最佳 ${fmtN(p.top.w)}×${p.top.r}</span><span>1RM≈${fmtN(Math.round(p.e1rm))}</span></div>`).join('')}</div>`;
-  const prs = used.map(id => {
-    const hs = exHistory(id), bw = hs.every(p => p.maxW === 0), sc = p => bw ? p.maxR : p.e1rm; let b = null;
-    hs.forEach(p => { if (!b || sc(p) >= sc(b)) b = p; });
-    return { id, bw, n: exName(id, S.workouts.flatMap(w => w.exs).find(e => e.exId === id)?.n), b };
-  }).filter(x => x.b).sort((a, b) => b.b.date.localeCompare(a.b.date));
-  h += `<div class="h2">個人紀錄（PR）</div><div class="card">${prs.map(x => `<div class="list-item" style="cursor:default"><div><b>${esc(x.n)}</b><div class="sub">${fmtDateY(x.b.date)}</div></div><div style="text-align:right">${x.bw
-    ? `<b>${x.b.maxR} 次</b><div class="sub">自重</div>`
-    : `<b>${fmtN(x.b.top.w)} × ${x.b.top.r}</b><div class="sub">預估 1RM ${fmtN(Math.round(x.b.e1rm))}</div>`}</div></div>`).join('')}<div class="sub" style="margin-top:8px">有重量的動作以預估 1RM 最高的一組為準，自重動作以單組最多次數為準，都不含暖身組。</div></div>`;
+  const prs = used.map(id => ({ id, n: exName(id, S.workouts.flatMap(w => w.exs).find(e => e.exId === id)?.n), ...exPR(id) }))
+    .filter(x => x.b).sort((a, b) => b.b.date.localeCompare(a.b.date));
+  h += `<div class="h2">個人紀錄（PR）</div><div class="card">${prs.map(x => `<div class="list-item" style="cursor:default"><div><b>${esc(x.n)}</b><div class="sub">${fmtDateY(x.b.date)}</div></div><div style="text-align:right">${prHtml(x.id, x)}</div></div>`).join('')}<div class="sub" style="margin-top:8px">有重量的動作以預估 1RM 最高的一組為準，自重與計時動作以單組最多次數（秒數）為準，都不含暖身組。</div></div>`;
   const bws = [...S.workouts].filter(w => w.bw).sort((a, b) => a.date.localeCompare(b.date));
   h += `<div class="h2">體重</div><div class="card">${bws.length ? lineChart(bws.map(w => ({ x: fmtDate(w.date).replace(/（.*/, ''), y: w.bw })), 'kg') : '<div class="empty">訓練時填寫體重後會顯示</div>'}</div>`;
   h += `<div class="h2">各肌群訓練組數</div><div class="card"><div class="chips">${[['week', '本週'], ['last', '上週'], ['30', '近 30 天']].map(([k, t]) => `<button class="chip ${ui.mg === k ? 'on' : ''}" data-act="mg" data-k="${k}">${t}</button>`).join('')}</div>${muscleBars()}</div>`;
@@ -631,9 +642,11 @@ const ACT = {
     s.done = !s.done;
     if (s.done) {
       ensureAudio();
-      const now = Date.now(), ld = a.lastDone;
-      if (ld && a.exs[ld.ei]?.sets[ld.si] && now - ld.t < 15 * 60e3) a.exs[ld.ei].sets[ld.si].rest = Math.round((now - ld.t) / 1000);
-      a.lastDone = { ei: +d.ei, si: +d.si, t: now };
+      /* 上一組的休息 = 上一組勾完成到這一組勾完成的時間；用 doneAt 找，移動或刪除動作也不會記錯組 */
+      const now = Date.now();
+      const ld = a.exs.flatMap(x => x.sets).filter(x => x !== s && x.done && x.doneAt).sort((p, q) => q.doneAt - p.doneAt)[0];
+      if (ld && now - ld.doneAt < 15 * 60e3) ld.rest = Math.round((now - ld.doneAt) / 1000);
+      s.doneAt = now;
       a.rest = { start: now, target: (S.restByEx || {})[e.exId] || S.settings.rest, exId: e.exId, alerted: false };
       const bw = !(num(s.w) > 0), f = x => prScore(x, bw);
       const same = a.exs.filter(x => x.exId === e.exId).flatMap(x => x.sets).filter(x => x !== s && x.done && !x.wu);
@@ -670,6 +683,16 @@ const ACT = {
     e.sets.forEach(s => { if (!s.wu && !s.done && num(s.w) === sg.w) s.w = sg.to; }); save(); render();
   },
   addEx: () => openPicker(id => { S.active.exs.push(makeEx(id)); save(); closeModal(); render(); }),
+  exHist: d => {
+    const a = S.active, id = a.exs[+d.ei].exId, u = RU(id), pr = exPR(id);
+    const past = sortedW().filter(w => w.id !== a.editId).map(w => ({ w, e: w.exs.find(x => x.exId === id) })).filter(x => x.e).slice(0, 8);
+    let h = `<h3>${esc(exName(id, a.exs[+d.ei].n))}</h3>`;
+    if (!past.length) return openModal(h + `<div class="empty">還沒有這個動作的紀錄</div><button class="btn block" data-act="closeModal">關閉</button>`);
+    if (pr.b) h += `<div class="card hrow" style="align-items:center"><div><b>🏆 個人紀錄</b><div class="sub">${fmtDateY(pr.b.date)}</div></div><div style="text-align:right">${prHtml(id, pr)}</div></div>`;
+    h += past.map(({ w, e }) => `<div class="list-item" style="display:block;cursor:default"><div class="hrow"><b>${fmtDate(w.date)}</b><span class="sub">${esc(w.name || '自由訓練')}</span></div>
+      <div class="setline">${e.sets.map(s => (s.wu ? '暖 ' : '') + fmtSet(s, u) + (s.rpe ? ` @${s.rpe}` : '')).join('、')}</div>${e.note ? `<div class="sub">📝 ${esc(e.note)}</div>` : ''}</div>`).join('');
+    openModal(h + `<div class="sub" style="margin:8px 0">最近 ${past.length} 次，@ 後面是 RPE</div><button class="btn block" data-act="closeModal">關閉</button>`);
+  },
   exMenu: d => openModal(`<h3>${esc(exName(S.active.exs[+d.ei].exId, S.active.exs[+d.ei].n))}</h3>
     <button class="btn block" data-act="exMove" data-ei="${d.ei}" data-d="-1">↑ 上移</button><button class="btn block" data-act="exMove" data-ei="${d.ei}" data-d="1">↓ 下移</button>
     <button class="btn danger block" data-act="exDel" data-ei="${d.ei}">移除此動作</button>`),
@@ -760,11 +783,29 @@ const ACT = {
     let h = `<h3>動作清單</h3><div class="sub" style="margin-bottom:8px">刪除動作不會影響歷史紀錄。</div>`;
     GROUPS.forEach(g => {
       h += `<div class="sub" style="margin-top:8px">${g}</div>` + S.exercises.filter(e => e.group === g).map(e =>
-        `<div class="list-item"><span>${esc(e.name)}${e.builtin ? '' : '<span class="tag">自訂</span>'}</span><button class="btn sm danger" data-act="delEx" data-id="${esc(e.id)}">刪除</button></div>`).join('');
+        `<div class="list-item"><span>${esc(e.name)}${e.builtin ? '' : '<span class="tag">自訂</span>'}${e.timed ? '<span class="tag">計時</span>' : ''}</span><button class="btn sm" data-act="editEx" data-id="${esc(e.id)}">編輯</button></div>`).join('');
     });
     openModal(h + `<button class="btn block" style="margin-top:12px" data-act="closeModal">關閉</button>`);
   },
-  delEx: d => { if (confirm('刪除這個動作？')) { S.exercises = S.exercises.filter(e => e.id !== d.id); S.routines.forEach(r => { r.items = r.items.filter(i => i.exId !== d.id); }); save(); ACT.manageEx(); } },
+  editEx: d => {
+    const e = exInfo(d.id); if (!e) return;
+    openModal(`<h3>編輯動作</h3>
+    <div class="sub" style="margin-bottom:6px">名稱</div><input class="inp left" id="exn" value="${esc(e.name)}" style="margin-bottom:10px">
+    <div class="sub" style="margin-bottom:6px">部位</div><select class="inp" id="exg" style="margin-bottom:10px">${GROUPS.map(g => `<option ${g === e.group ? 'selected' : ''}>${g}</option>`).join('')}</select>
+    <label class="card row" style="margin-bottom:10px"><span style="flex:1;font-weight:600">計時動作<div class="sub" style="font-weight:400">記秒數而不是次數，例如棒式</div></span><input type="checkbox" id="ext" ${e.timed ? 'checked' : ''} style="width:26px;height:26px"></label>
+    <div class="sub" style="margin-bottom:10px">改名後，過去的紀錄也會一起改成新名稱。</div>
+    <div class="acts"><button class="btn" data-act="manageEx">返回</button><button class="btn primary" data-act="saveEx" data-id="${esc(e.id)}">儲存</button></div>
+    <button class="btn danger block" style="margin-top:10px" data-act="delEx" data-id="${esc(e.id)}">刪除此動作</button>`);
+  },
+  saveEx: d => {
+    const e = exInfo(d.id); if (!e) return;
+    const name = $('#exn').value.trim(); if (!name) return toast('請輸入動作名稱');
+    if (S.exercises.some(x => x.id !== e.id && x.name === name)) return toast('已有同名的動作');
+    e.name = name; e.group = $('#exg').value; e.timed = $('#ext').checked;
+    [...S.workouts, ...(S.active ? [S.active] : [])].forEach(w => w.exs.forEach(x => { if (x.exId === e.id) x.n = name; }));
+    save(); render(); ACT.manageEx(); toast('已儲存');
+  },
+  delEx: d => { if (confirm('刪除這個動作？（不影響歷史紀錄）')) { S.exercises = S.exercises.filter(e => e.id !== d.id); S.routines.forEach(r => { r.items = r.items.filter(i => i.exId !== d.id); }); save(); render(); ACT.manageEx(); } },
   exportJson: () => { download(`重訓日誌備份-${today()}.json`, JSON.stringify(S, null, 1), 'application/json'); S.settings.lastExport = today(); save(); render(); },
   exportCsv: () => {
     const rows = [['日期','訓練名稱','體重','整體感受','動作','組序','重量(kg)','次數','RPE','休息(秒)','暖身','動作備註','訓練備註']];

@@ -1,5 +1,5 @@
 // 每次發佈新版都要改 CACHE 名稱，手機才會跳出「有新版本」
-const CACHE = 'liftlog-v6';
+const CACHE = 'liftlog-v7';
 const FILES = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon.svg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' }))))); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

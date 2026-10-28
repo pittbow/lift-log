@@ -96,6 +96,7 @@ nav button.on{color:var(--accent)}
 .empty{text-align:center;color:var(--sub);padding:30px 10px}
 #toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:700;z-index:60;opacity:0;transition:opacity .25s;pointer-events:none;max-width:90vw;text-align:center}
 #toast.on{opacity:1}
+#toast.act{pointer-events:auto;display:flex;align-items:center;padding:6px 6px 6px 16px}
 svg.chart{width:100%;height:auto;display:block}
 .stat{display:flex;gap:8px;margin-bottom:10px}
 .stat>div{flex:1;background:var(--card2);border-radius:10px;padding:8px;text-align:center}
@@ -224,10 +225,21 @@ function lastPerf(exId, excludeId) {
   }
   return null;
 }
-function bestE1(exId, excludeId) {
+function bestOf(exId, excludeId, f) {
   let b = 0;
-  S.workouts.forEach(w => { if (w.id !== excludeId) w.exs.forEach(e => { if (e.exId === exId) e.sets.forEach(s => { if (!s.wu) b = Math.max(b, e1rm(s.w, s.r)); }); }); });
+  S.workouts.forEach(w => { if (w.id !== excludeId) w.exs.forEach(e => { if (e.exId === exId) e.sets.forEach(s => { if (!s.wu) b = Math.max(b, f(s)); }); }); });
   return b;
+}
+/* 有重量看預估 1RM；重量為 0 的自重動作看次數 */
+const prScore = (s, bw) => bw ? (num(s.w) > 0 ? 0 : num(s.r) || 0) : e1rm(num(s.w), num(s.r));
+/* 上次每組同重量且次數都沒掉，就建議加重 */
+function suggestUp(e, lp) {
+  if (!lp || lp.sets.length < 2) return null;
+  const w = num(lp.sets[0].w), r = num(lp.sets[0].r);
+  if (!(w > 0) || !(r > 0) || lp.sets.some(s => num(s.w) !== w || (num(s.r) || 0) < r)) return null;
+  const todo = e.sets.filter(s => !s.wu && !s.done);
+  if (!todo.length || todo.some(s => num(s.w) !== w)) return null;
+  return { w, r, n: lp.sets.length, to: fmtN(w + S.settings.step) };
 }
 const newSet = (w = '', r = '') => ({ w, r, rpe: null, rest: null, done: false });
 function makeEx(exId, n) {
@@ -296,7 +308,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) { ke
 function tick() {
   const a = S.active;
   const el = $('#elapsed');
-  if (el && a) el.textContent = '已訓練 ' + mmss(Math.max(0, (Date.now() - a.start) / 1000)).replace(/^(\d+):(\d+)$/, (m, x, y) => x + ' 分 ' + y + ' 秒');
+  if (el && a) el.textContent = a.editId ? '編輯過去的紀錄' : '已訓練 ' +mmss(Math.max(0, (Date.now() - a.start) / 1000)).replace(/^(\d+):(\d+)$/, (m, x, y) => x + ' 分 ' + y + ' 秒');
   const bar = $('#restbar');
   if (!a || !a.rest) { bar.classList.remove('show', 'fin'); return; }
   const sec = (Date.now() - a.rest.start) / 1000, tgt = a.rest.target;
@@ -310,7 +322,14 @@ function tick() {
 setInterval(tick, 500);
 
 /* ========== 畫面 ========== */
-function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2200); }
+let UNDO = null;
+function toast(m) { const t = $('#toast'); UNDO = null; t.textContent = m; t.classList.remove('act'); t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2200); }
+function undoToast(m, fn) {
+  const t = $('#toast'); UNDO = fn;
+  t.innerHTML = `${esc(m)}<button class="btn sm primary" style="margin-left:10px;min-height:32px" data-act="undo">復原</button>`;
+  t.classList.add('on', 'act'); clearTimeout(toast.t);
+  toast.t = setTimeout(() => { t.classList.remove('on', 'act'); UNDO = null; }, 6000);
+}
 function openModal(h) { const m = $('#modal'); m.innerHTML = `<div class="sheet">${h}</div>`; m.classList.add('on'); }
 function closeModal() { const m = $('#modal'); m.classList.remove('on'); m.innerHTML = ''; }
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
@@ -323,11 +342,17 @@ function applyTheme() {
 function render() {
   applyTheme();
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === ui.tab));
-  $('#main').innerHTML = backupBanner() + ({ train: vTrain, hist: vHist, trend: vTrend, set: vSet })[ui.tab]();
+  $('#main').innerHTML = updateBanner() + backupBanner() +({ train: vTrain, hist: vHist, trend: vTrend, set: vSet })[ui.tab]();
   if (S.active) keepAwake();
+  else if (wake) { wake.release().catch(() => {}); wake = null; }
   tick();
 }
 
+/* --- 新版本提示 --- */
+function updateBanner() {
+  if (!ui.newSW) return '';
+  return `<div class="card hrow" style="border-color:var(--accent);align-items:center"><div><b>有新版本</b><div class="sub">更新不會影響已記錄的資料</div></div><button class="btn sm primary" data-act="update">立即更新</button></div>`;
+}
 /* --- 備份提醒 --- */
 function backupBanner() {
   if (S.active || !S.workouts.length || S.settings.snooze === today()) return '';
@@ -346,6 +371,7 @@ function vStart() {
   const last = sortedW()[0];
   let h = `<div class="hdr"><div class="h1">開始訓練</div></div>`;
   h += `<button class="btn primary block" data-act="startBlank">＋ 空白訓練</button>`;
+  h += `<div class="sub" style="margin:-4px 2px 10px">要補登以前的訓練？開始後點上方的日期就能修改。</div>`;
   if (last) h += `<button class="btn block" data-act="copyLast" data-id="${last.id}">📋 複製上次訓練<br><span class="sub">${fmtDate(last.date)} ${esc(last.name || '自由訓練')}・${last.exs.length} 個動作</span></button>`;
   h += `<div class="h2">我的課表</div>`;
   if (!S.routines.length) h += `<div class="empty">還沒有課表，到「設定」新增</div>`;
@@ -357,13 +383,14 @@ function vStart() {
 }
 function vActive() {
   const a = S.active;
-  let h = `<div class="hdr"><div><div class="h1">${esc(a.name || '自由訓練')}${a.editId ? '（編輯）' : ''}</div><div class="sub">${fmtDate(a.date)}・<span id="elapsed"></span></div></div>
+  let h = `<div class="hdr"><div><div class="h1">${esc(a.name || '自由訓練')}${a.editId ? '（編輯）' : ''}</div><div class="sub"><span data-act="actMenu" style="text-decoration:underline dotted;text-underline-offset:3px">${fmtDate(a.date)}</span>・<span id="elapsed"></span></div></div>
   <button class="btn sm" data-act="actMenu">⋯</button></div>`;
   h += `<div class="card row"><label>今日體重 (kg)</label><input class="inp" style="max-width:110px" inputmode="decimal" data-f="bw" value="${esc(a.bw)}" placeholder="選填"></div>`;
   a.exs.forEach((e, ei) => {
-    const lp = lastPerf(e.exId, a.editId);
+    const lp = lastPerf(e.exId, a.editId), sg = suggestUp(e, lp);
     h += `<div class="card"><div class="ex-title"><b>${esc(exName(e.exId, e.n))}</b><button class="btn sm ghost" data-act="exMenu" data-ei="${ei}">⋯</button></div>
     <div class="prev">${lp ? '上次 ' + fmtDate(lp.date) + '：' + lp.sets.map(s => `${fmtN(s.w)}×${s.r}`).join('、') : '尚無紀錄'}</div>
+    ${sg ? `<div class="row" style="margin:-2px 0 8px;font-size:14px"><span style="flex:1;color:var(--accent)">💡 上次 ${sg.n} 組都做到 ${fmtN(sg.w)}×${sg.r}，可以試試 ${sg.to} kg</span><button class="btn sm" data-act="bump" data-ei="${ei}">套用</button></div>` : ''}
     <div class="sethead"><span>組</span><span>重量 kg</span><span>次數</span><span>RPE</span><span>完成</span></div>`;
     e.sets.forEach((s, si) => {
       h += `<div class="set ${s.done ? 'done' : ''} ${s.wu ? 'wu' : ''}"><button class="n" data-act="wu" data-ei="${ei}" data-si="${si}" title="點一下切換暖身組">${s.wu ? '暖' : e.sets.slice(0, si + 1).filter(x => !x.wu).length}</button>
@@ -373,7 +400,7 @@ function vActive() {
       <input class="inp" inputmode="numeric" data-f="r" data-ei="${ei}" data-si="${si}" value="${esc(s.r)}" placeholder="0">
       <button class="rpe ${s.rpe ? 'has' : ''}" data-act="rpe" data-ei="${ei}" data-si="${si}">${s.rpe || '–'}</button>
       <button class="chk" data-act="done" data-ei="${ei}" data-si="${si}">✓</button></div>
-      ${s.pr ? '<div class="pr" style="text-align:right">🏆 新紀錄（預估 1RM）</div>' : ''}`;
+      ${s.pr ? `<div class="pr" style="text-align:right">🏆 新紀錄（${num(s.w) > 0 ? '預估 1RM' : '次數'}）</div>` : ''}`;
     });
     h += `<div class="acts"><button class="btn sm" data-act="addSet" data-ei="${ei}">＋ 新增一組</button><button class="btn sm" data-act="delSet" data-ei="${ei}">－ 移除最後一組</button></div>
     <input class="inp left note" data-f="note" data-ei="${ei}" value="${esc(e.note)}" placeholder="這個動作的備註（器材、感受…）"></div>`;
@@ -445,9 +472,9 @@ function vHistDetail(w) {
 function exHistory(exId) {
   return [...S.workouts].sort((a, b) => a.date.localeCompare(b.date) || (a.start || 0) - (b.start || 0)).map(w => {
     const e = w.exs.find(x => x.exId === exId); if (!e || !e.sets.some(s => !s.wu)) return null;
-    let best = 0, maxW = 0, vol = 0, top = null;
-    e.sets.filter(s => !s.wu).forEach(s => { const v = e1rm(s.w, s.r); if (v > best || !top || (v === best && (s.r || 0) > (top.r || 0))) { best = v; top = s; } maxW = Math.max(maxW, s.w || 0); vol += (s.w || 0) * (s.r || 0); });
-    return { date: w.date, e1rm: best, maxW, vol, top };
+    let best = 0, maxW = 0, vol = 0, maxR = 0, totR = 0, top = null;
+    e.sets.filter(s => !s.wu).forEach(s => { const v = e1rm(s.w, s.r); if (v > best || !top || (v === best && (s.r || 0) > (top.r || 0))) { best = v; top = s; } maxW = Math.max(maxW, s.w || 0); vol += (s.w || 0) * (s.r || 0); maxR = Math.max(maxR, s.r || 0); totR += s.r || 0; });
+    return { date: w.date, e1rm: best, maxW, vol, maxR, totR, top };
   }).filter(Boolean);
 }
 function lineChart(pts, unit) {
@@ -503,20 +530,27 @@ function vTrend() {
   if (!used.includes(ui.trendEx)) ui.trendEx = used[0];
   h += `<select class="inp" data-f="trendEx">${used.map(id => `<option value="${esc(id)}" ${id === ui.trendEx ? 'selected' : ''}>${esc(exName(id, S.workouts.flatMap(w => w.exs).find(e => e.exId === id)?.n))}</option>`).join('')}</select>`;
   const hist = exHistory(ui.trendEx);
-  const M = { e1rm: ['預估 1RM', 'e1rm'], maxW: ['最大重量', 'maxW'], vol: ['總量', 'vol'] };
+  const bwMode = hist.every(p => p.maxW === 0);
+  const M = bwMode ? { maxR: ['最多次數', 'maxR'], totR: ['總次數', 'totR'] } : { e1rm: ['預估 1RM', 'e1rm'], maxW: ['最大重量', 'maxW'], vol: ['總量', 'vol'] };
+  if (!M[ui.metric]) ui.metric = Object.keys(M)[0];
   h += `<div class="chips" style="margin-top:10px">${Object.entries(M).map(([k, v]) => `<button class="chip ${ui.metric === k ? 'on' : ''}" data-act="metric" data-m="${k}">${v[0]}</button>`).join('')}</div>`;
   const key = M[ui.metric][1];
-  const best = Math.max(...hist.map(p => p.e1rm)), bestW = Math.max(...hist.map(p => p.maxW));
-  h += `<div class="card"><div class="stat"><div><b>${fmtN(Math.round(best * 10) / 10)}</b><span>最佳預估 1RM</span></div><div><b>${fmtN(bestW)}</b><span>最大重量 kg</span></div><div><b>${hist.length}</b><span>訓練次數</span></div></div>
+  const mx = k => Math.max(...hist.map(p => p[k]));
+  const stats = bwMode ? [[mx('maxR'), '單組最多次數'], [mx('totR'), '單次最多總次數']] : [[Math.round(mx('e1rm') * 10) / 10, '最佳預估 1RM'], [mx('maxW'), '最大重量 kg']];
+  h += `<div class="card"><div class="stat">${stats.map(([v, t]) => `<div><b>${fmtN(v)}</b><span>${t}</span></div>`).join('')}<div><b>${hist.length}</b><span>訓練次數</span></div></div>
   ${lineChart(hist.map(p => ({ x: fmtDate(p.date).replace(/（.*/, ''), y: Math.round(p[key] * 10) / 10 })), '')}
-  <div class="sub">預估 1RM 使用 Epley 公式：重量 ×（1 + 次數 ÷ 30）</div></div>`;
-  h += `<div class="h2">最近紀錄</div><div class="card">${[...hist].reverse().slice(0, 8).map(p => `<div class="hrow setline"><span>${fmtDate(p.date)}</span><span>最佳 ${fmtN(p.top.w)}×${p.top.r}</span><span>1RM≈${fmtN(Math.round(p.e1rm))}</span></div>`).join('')}</div>`;
+  <div class="sub">${bwMode ? '自重動作以次數計算。計時動作（如棒式）可把秒數填在次數欄。' : '預估 1RM 使用 Epley 公式：重量 ×（1 + 次數 ÷ 30）'}</div></div>`;
+  h += `<div class="h2">最近紀錄</div><div class="card">${[...hist].reverse().slice(0, 8).map(p => bwMode
+    ? `<div class="hrow setline"><span>${fmtDate(p.date)}</span><span>最多 ${p.maxR} 次</span><span>總 ${p.totR} 次</span></div>`
+    : `<div class="hrow setline"><span>${fmtDate(p.date)}</span><span>最佳 ${fmtN(p.top.w)}×${p.top.r}</span><span>1RM≈${fmtN(Math.round(p.e1rm))}</span></div>`).join('')}</div>`;
   const prs = used.map(id => {
-    const hs = exHistory(id); let b = null;
-    hs.forEach(p => { if (!b || p.e1rm >= b.e1rm) b = p; });
-    return { id, n: exName(id, S.workouts.flatMap(w => w.exs).find(e => e.exId === id)?.n), b };
+    const hs = exHistory(id), bw = hs.every(p => p.maxW === 0), sc = p => bw ? p.maxR : p.e1rm; let b = null;
+    hs.forEach(p => { if (!b || sc(p) >= sc(b)) b = p; });
+    return { id, bw, n: exName(id, S.workouts.flatMap(w => w.exs).find(e => e.exId === id)?.n), b };
   }).filter(x => x.b).sort((a, b) => b.b.date.localeCompare(a.b.date));
-  h += `<div class="h2">個人紀錄（PR）</div><div class="card">${prs.map(x => `<div class="list-item" style="cursor:default"><div><b>${esc(x.n)}</b><div class="sub">${fmtDateY(x.b.date)}</div></div><div style="text-align:right"><b>${fmtN(x.b.top.w)} × ${x.b.top.r}</b><div class="sub">預估 1RM ${fmtN(Math.round(x.b.e1rm))}</div></div></div>`).join('')}<div class="sub" style="margin-top:8px">以預估 1RM 最高的一組為準，不含暖身組。</div></div>`;
+  h += `<div class="h2">個人紀錄（PR）</div><div class="card">${prs.map(x => `<div class="list-item" style="cursor:default"><div><b>${esc(x.n)}</b><div class="sub">${fmtDateY(x.b.date)}</div></div><div style="text-align:right">${x.bw
+    ? `<b>${x.b.maxR} 次</b><div class="sub">自重</div>`
+    : `<b>${fmtN(x.b.top.w)} × ${x.b.top.r}</b><div class="sub">預估 1RM ${fmtN(Math.round(x.b.e1rm))}</div>`}</div></div>`).join('')}<div class="sub" style="margin-top:8px">有重量的動作以預估 1RM 最高的一組為準，自重動作以單組最多次數為準，都不含暖身組。</div></div>`;
   const bws = [...S.workouts].filter(w => w.bw).sort((a, b) => a.date.localeCompare(b.date));
   h += `<div class="h2">體重</div><div class="card">${bws.length ? lineChart(bws.map(w => ({ x: fmtDate(w.date).replace(/（.*/, ''), y: w.bw })), 'kg') : '<div class="empty">訓練時填寫體重後會顯示</div>'}</div>`;
   h += `<div class="h2">各肌群訓練組數</div><div class="card"><div class="chips">${[['week', '本週'], ['last', '上週'], ['30', '近 30 天']].map(([k, t]) => `<button class="chip ${ui.mg === k ? 'on' : ''}" data-act="mg" data-k="${k}">${t}</button>`).join('')}</div>${muscleBars()}</div>`;
@@ -601,8 +635,10 @@ const ACT = {
       if (ld && a.exs[ld.ei]?.sets[ld.si] && now - ld.t < 15 * 60e3) a.exs[ld.ei].sets[ld.si].rest = Math.round((now - ld.t) / 1000);
       a.lastDone = { ei: +d.ei, si: +d.si, t: now };
       a.rest = { start: now, target: (S.restByEx || {})[e.exId] || S.settings.rest, exId: e.exId, alerted: false };
-      const v = e1rm(num(s.w), num(s.r)), b = bestE1(e.exId, a.editId);
-      s.pr = !!(!s.wu && b > 0 && v > b + 0.001);
+      const bw = !(num(s.w) > 0), f = x => prScore(x, bw);
+      const same = a.exs.filter(x => x.exId === e.exId).flatMap(x => x.sets).filter(x => x !== s && x.done && !x.wu);
+      const b = Math.max(bestOf(e.exId, a.editId, f), ...same.map(f));
+      s.pr = !!(!s.wu && b > 0 && f(s) > b + 0.001);
       if (s.pr) toast('🏆 新紀錄！');
     } else s.pr = false;
     save(); render();
@@ -620,17 +656,31 @@ const ACT = {
     if (ref) { r = ref.r; if (!l || l.wu) w = ref.w; }
     e.sets.push(newSet(w, r)); save(); render();
   },
+  update: () => { const w = ui.newSW; if (!w) return; ui.updating = true; w.postMessage('skip'); setTimeout(() => location.reload(), 3000); },
   snooze: () => { S.settings.snooze = today(); save(); render(); },
   wu: d => { const s = S.active.exs[+d.ei].sets[+d.si]; s.wu = !s.wu; if (s.wu) s.pr = false; save(); render(); },
-  delSet: d => { S.active.exs[+d.ei].sets.pop(); save(); render(); },
+  delSet: d => {
+    const a = S.active, e = a.exs[+d.ei]; if (!e.sets.length) return;
+    const s = e.sets.pop(); save(); render();
+    undoToast('已移除一組', () => { if (S.active === a && a.exs.includes(e)) { e.sets.push(s); save(); render(); } });
+  },
+  undo: () => { const fn = UNDO; UNDO = null; $('#toast').classList.remove('on', 'act'); fn && fn(); },
+  bump: d => {
+    const e = S.active.exs[+d.ei], sg = suggestUp(e, lastPerf(e.exId, S.active.editId)); if (!sg) return;
+    e.sets.forEach(s => { if (!s.wu && !s.done && num(s.w) === sg.w) s.w = sg.to; }); save(); render();
+  },
   addEx: () => openPicker(id => { S.active.exs.push(makeEx(id)); save(); closeModal(); render(); }),
   exMenu: d => openModal(`<h3>${esc(exName(S.active.exs[+d.ei].exId, S.active.exs[+d.ei].n))}</h3>
     <button class="btn block" data-act="exMove" data-ei="${d.ei}" data-d="-1">↑ 上移</button><button class="btn block" data-act="exMove" data-ei="${d.ei}" data-d="1">↓ 下移</button>
     <button class="btn danger block" data-act="exDel" data-ei="${d.ei}">移除此動作</button>`),
   exMove: d => { const x = S.active.exs, i = +d.ei, j = i + +d.d; if (x[j]) { [x[i], x[j]] = [x[j], x[i]]; } save(); closeModal(); render(); },
-  exDel: d => { S.active.exs.splice(+d.ei, 1); save(); closeModal(); render(); },
+  exDel: d => {
+    const a = S.active, i = +d.ei, [x] = a.exs.splice(i, 1); save(); closeModal(); render();
+    undoToast(`已移除「${exName(x.exId, x.n)}」`, () => { if (S.active === a) { a.exs.splice(Math.min(i, a.exs.length), 0, x); save(); render(); } });
+  },
   actMenu: () => openModal(`<h3>訓練選項</h3>
     <div class="sub" style="margin-bottom:6px">訓練名稱</div><input class="inp left" data-f="aname" value="${esc(S.active.name)}" style="margin-bottom:10px">
+    <div class="sub" style="margin-bottom:6px">訓練日期</div><input class="inp left" type="date" data-f="adate" value="${S.active.date}" max="${today()}" style="margin-bottom:10px">
     <button class="btn danger block" data-act="abandon">${S.active.editId ? '放棄編輯' : '放棄這次訓練'}</button><button class="btn block" data-act="closeModal">關閉</button>`),
   abandon: () => { if (confirm(S.active.editId ? '放棄這次的修改？' : '放棄這次訓練？已輸入的資料會消失。')) { S.active = null; save(); closeModal(); render(); } },
   restAdj: d => { const r = S.active?.rest; if (r) { r.target = Math.max(15, r.target + +d.d); if (r.exId) { S.restByEx = S.restByEx || {}; S.restByEx[r.exId] = r.target; } r.alerted = Date.now() - r.start >= r.target * 1000; save(); tick(); } },
@@ -718,7 +768,7 @@ const ACT = {
   exportJson: () => { download(`重訓日誌備份-${today()}.json`, JSON.stringify(S, null, 1), 'application/json'); S.settings.lastExport = today(); save(); render(); },
   exportCsv: () => {
     const rows = [['日期','訓練名稱','體重','整體感受','動作','組序','重量(kg)','次數','RPE','休息(秒)','暖身','動作備註','訓練備註']];
-    sortedW().reverse().forEach(w => w.exs.forEach(e => e.sets.forEach((s, i) => rows.push([w.date, w.name || '', w.bw ?? '', w.feeling ? FEEL_TXT[w.feeling - 1] : '', exName(e.exId, e.n), i + 1, s.w, s.r, s.rpe ?? '', s.rest ?? '', s.wu ? '是' : '', e.note || '', w.note || '']))));
+    sortedW().reverse().forEach(w => w.exs.forEach(e => { let k = 0; e.sets.forEach(s => rows.push([w.date, w.name || '', w.bw ?? '', w.feeling ? FEEL_TXT[w.feeling - 1] : '', exName(e.exId, e.n), s.wu ? '暖' : ++k, s.w, s.r, s.rpe ?? '', s.rest ?? '', s.wu ? '是' : '', e.note || '', w.note || ''])); }));
     const csv = '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
     download(`重訓日誌-${today()}.csv`, csv, 'text/csv');
   },
@@ -756,7 +806,8 @@ document.addEventListener('input', e => {
   if (f === 'w' || f === 'r') a.exs[ei].sets[si][f] = t.value.replace(',', '.');
   else if (f === 'note') a.exs[ei].note = t.value;
   else if (f === 'bw') a.bw = t.value.replace(',', '.');
-  else if (f === 'aname') a.name = t.value;
+  else if (f === 'aname') { a.name = t.value; save(); render(); return; }
+  else if (f === 'adate') { setDate(t.value); return; }
   else if (f === 'wnote') a.wnote = t.value;
   else if (f === 'rname') RD.name = t.value;
   else if (f === 'hq') { ui.hq = t.value; $('#hlist').innerHTML = histListHtml(); return; }
@@ -768,13 +819,27 @@ document.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.f === 'trendEx') { ui.trendEx = t.value; render(); }
   if (t.dataset.f === 'setStep') { S.settings.step = +t.value; save(); }
+  if (t.dataset.f === 'adate') setDate(t.value);
 });
+function setDate(v) {
+  if (!S.active || !/^\d{4}-\d{2}-\d{2}$/.test(v) || v > today() || v === S.active.date) return;
+  S.active.date = v; save(); render();
+}
 document.addEventListener('input', e => { if (e.target.id === 'pq') fillPicker(e.target.value); });
 document.addEventListener('focusin', e => { if (e.target.matches('.set .inp')) setTimeout(() => e.target.select && e.target.select(), 0); });
 
 /* ========== 啟動 ========== */
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator) {
+  const sw = navigator.serviceWorker;
+  const ready = w => { if (w && sw.controller) { ui.newSW = w; render(); } };
+  sw.register('sw.js').then(reg => {
+    ready(reg.waiting);
+    reg.addEventListener('updatefound', () => { const w = reg.installing; w && w.addEventListener('statechange', () => { if (w.state === 'installed') ready(w); }); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+  sw.addEventListener('controllerchange', () => { if (ui.updating) { ui.updating = false; location.reload(); } });
+}
 render();
 </script>
 </body>
